@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -124,6 +125,69 @@ class Collection:
         with self._lock:
             self._index.clear()
             self.updated_at = datetime.now(timezone.utc)
+
+    def save(self, filepath: str | Path) -> None:
+        """Save collection to SQLite database file.
+        
+        Args:
+            filepath: Path to save the collection to.
+        """
+        from nexusdb.persistence import SQLiteBackend
+        
+        backend = SQLiteBackend(filepath)
+        
+        # Get all vectors from index
+        vectors_to_save = list(self._index._vectors.values())
+        
+        backend.save_collection(
+            collection_name=self.name,
+            dimension=self.dimension,
+            metric=self.metric,
+            vectors=vectors_to_save,
+            created_at=self.created_at.isoformat(),
+            updated_at=self.updated_at.isoformat(),
+        )
+
+    @classmethod
+    def load(cls, filepath: str | Path) -> Optional[Collection]:
+        """Load collection from SQLite database file.
+        
+        Args:
+            filepath: Path to load the collection from.
+            
+        Returns:
+            Collection object or None if file doesn't exist or is empty.
+        """
+        from nexusdb.persistence import SQLiteBackend
+        
+        filepath = Path(filepath)
+        if not filepath.exists():
+            return None
+        
+        backend = SQLiteBackend(filepath)
+        collection_info, vectors = backend.load_collection()
+        
+        if collection_info is None:
+            return None
+        
+        # Create collection
+        collection = cls(
+            name=collection_info["name"],
+            dimension=collection_info["dimension"],
+            metric=collection_info["metric"],
+        )
+        
+        # Restore timestamps
+        if collection_info["created_at"]:
+            collection.created_at = datetime.fromisoformat(collection_info["created_at"])
+        if collection_info["updated_at"]:
+            collection.updated_at = datetime.fromisoformat(collection_info["updated_at"])
+        
+        # Add vectors back to collection
+        if vectors:
+            collection.add(vectors)
+        
+        return collection
 
     def __repr__(self) -> str:
         return (

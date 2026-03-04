@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from nexusdb.core.collection import Collection
 from nexusdb.core.vector import Vector
+from nexusdb.persistence.config import AUTO_PERSIST, get_collection_db_path
 
 # ---------------------------------------------------------------------------
 # App
@@ -34,6 +35,60 @@ app.add_middleware(
 
 # In-memory store of collections
 _collections: Dict[str, Collection] = {}
+
+
+# ---------------------------------------------------------------------------
+# Persistence handlers
+# ---------------------------------------------------------------------------
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Load persisted collections on startup if auto-persist is enabled."""
+    if not AUTO_PERSIST:
+        return
+    
+    from nexusdb.persistence.config import PERSIST_DIR
+    
+    # Find all .db files in persist directory
+    if PERSIST_DIR.exists():
+        for db_file in PERSIST_DIR.glob("*.db"):
+            try:
+                collection_name = db_file.stem  # filename without .db
+                col = Collection.load(db_file)
+                if col:
+                    _collections[col.name] = col
+                    print(f"✅ Loaded collection: {col.name} ({col.count} vectors)")
+            except Exception as e:
+                print(f"⚠️  Failed to load {db_file}: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Save all collections on shutdown if auto-persist is enabled."""
+    if not AUTO_PERSIST:
+        return
+    
+    for name, col in _collections.items():
+        try:
+            db_path = get_collection_db_path(name)
+            col.save(db_path)
+            print(f"✅ Saved collection: {name} to {db_path}")
+        except Exception as e:
+            print(f"⚠️  Failed to save {name}: {e}")
+
+
+def _auto_save_collection(collection_name: str) -> None:
+    """Helper to auto-save a collection if AUTO_PERSIST is enabled."""
+    if not AUTO_PERSIST or collection_name not in _collections:
+        return
+    
+    try:
+        col = _collections[collection_name]
+        db_path = get_collection_db_path(collection_name)
+        col.save(db_path)
+    except Exception as e:
+        print(f"⚠️  Failed to auto-save collection {collection_name}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +156,29 @@ class VectorResponse(BaseModel):
     dimension: int
 
 
+class SaveCollectionRequest(BaseModel):
+    collection: str
+    filepath: str
+
+
+class SaveCollectionResponse(BaseModel):
+    message: str
+    collection: str
+    filepath: str
+
+
+class LoadCollectionRequest(BaseModel):
+    filepath: str
+    collection_name: Optional[str] = None  # Override loaded name if provided
+
+
+class LoadCollectionResponse(BaseModel):
+    message: str
+    collection: str
+    vector_count: int
+    dimension: int
+
+
 class HealthResponse(BaseModel):
     status: str
     version: str
@@ -126,6 +204,15 @@ def create_collection(req: CollectionCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
     _collections[req.name] = col
+    
+    # Auto-save if enabled
+    if AUTO_PERSIST:
+        try:
+            db_path = get_collection_db_path(req.name)
+            col.save(db_path)
+        except Exception as e:
+            print(f"⚠️  Failed to auto-save collection {req.name}: {e}")
+    
     return CollectionInfo(**col.info())
 
 
@@ -148,7 +235,19 @@ def delete_collection(name: str):
     """Delete a collection and all its vectors."""
     if name not in _collections:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
+    
     del _collections[name]
+    
+    # Clean up persisted data if enabled
+    if AUTO_PERSIST:
+        try:
+            import os
+            db_path = get_collection_db_path(name)
+            if db_path.exists():
+                os.remove(db_path)
+        except Exception as e:
+            print(f"⚠️  Failed to delete persisted data for {name}: {e}")
+    
     return {"message": f"Collection '{name}' deleted"}
 
 
@@ -186,6 +285,9 @@ def upsert_vectors(req: UpsertRequest):
         ids = col.add(vectors)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Auto-save if enabled
+    _auto_save_collection(req.collection)
 
     return UpsertResponse(ids=ids, count=len(ids))
 
@@ -262,7 +364,70 @@ def delete_vector(collection: str, vector_id: str):
             status_code=404, detail=f"Vector '{vector_id}' not found"
         )
 
+    # Auto-save if enabled
+    _auto_save_collection(collection)
+
     return {"message": f"Vector '{vector_id}' deleted"}
+
+
+# ---------------------------------------------------------------------------
+# Persistence endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/collections/{name}/save", response_model=SaveCollectionResponse)
+def save_collection(name: str, req: SaveCollectionRequest):
+    """Save a collection to disk."""
+    if name not in _collections:
+        raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
+
+    try:
+        col = _collections[name]
+        col.save(req.filepath)
+        return SaveCollectionResponse(
+            message=f"Collection '{name}' saved successfully",
+            collection=name,
+            filepath=req.filepath,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save collection: {str(e)}")
+
+
+@app.post("/collections/load", response_model=LoadCollectionResponse)
+def load_collection(req: LoadCollectionRequest):
+    """Load a collection from disk."""
+    try:
+        from nexusdb.core.collection import Collection
+
+        col = Collection.load(req.filepath)
+        if col is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not load collection from {req.filepath}",
+            )
+
+        # Override collection name if provided
+        if req.collection_name:
+            col.name = req.collection_name
+
+        # Store in collections
+        if col.name in _collections:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Collection '{col.name}' already exists",
+            )
+
+        _collections[col.name] = col
+
+        return LoadCollectionResponse(
+            message=f"Collection loaded successfully",
+            collection=col.name,
+            vector_count=col.count,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load collection: {str(e)}")
 
 
 # ---------------------------------------------------------------------------
