@@ -1,0 +1,28 @@
+/* ═══════════════════════════════════════════════════════
+   App Layout
+   ═══════════════════════════════════════════════════════ */
+
+.main-content {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.view-container {
+  flex: 1;
+  padding: 28px;
+  animation: fadeIn var(--duration-slow) var(--ease);
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+  }
+
+  .view-container {
+    padding: 20px 16px;
+  }
+}

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from nexusdb.core.collection import Collection
@@ -20,6 +21,15 @@ app = FastAPI(
     title="NexusDB",
     description="A vector database built from scratch",
     version="0.1.0",
+)
+
+# CORS — allow the Vite dev server & any frontend origin
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # In-memory store of collections
