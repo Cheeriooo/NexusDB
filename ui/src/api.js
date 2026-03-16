@@ -33,4 +33,14 @@ export const api = {
         request(`/vectors/${collection}/${id}`),
     deleteVector: (collection, id) =>
         request(`/vectors/${collection}/${id}`, { method: 'DELETE' }),
+
+    // Embedding
+    embedTexts: (texts, model = 'all-MiniLM-L6-v2') =>
+        request('/embed', { method: 'POST', body: JSON.stringify({ texts, model }) }),
+    embedUpsert: (data) =>
+        request('/vectors/embed-upsert', { method: 'POST', body: JSON.stringify(data) }),
+
+    // Visualization (PCA)
+    visualizeCollection: (name, k = 500) =>
+        request(`/collections/${name}/visualize`, { method: 'POST', body: JSON.stringify({ k }) }),
 };

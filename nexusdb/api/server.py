@@ -187,6 +187,55 @@ class HealthResponse(BaseModel):
     timestamp: str
 
 
+# --- Embedding models ---
+
+class EmbedRequest(BaseModel):
+    texts: List[str]
+    model: str = "all-MiniLM-L6-v2"
+
+
+class EmbedResponse(BaseModel):
+    embeddings: List[List[float]]
+    dimension: int
+    model: str
+    count: int
+
+
+class EmbedUpsertItem(BaseModel):
+    text: str
+    id: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class EmbedUpsertRequest(BaseModel):
+    collection: str
+    texts: List[EmbedUpsertItem]
+    model: str = "all-MiniLM-L6-v2"
+
+
+# --- Visualization models ---
+
+class VisualizeRequest(BaseModel):
+    k: int = 500
+
+
+class VisualizeVector(BaseModel):
+    id: str
+    projected: List[float]   # [x, y, z]
+    metadata: Dict[str, Any]
+
+
+class VisualizeResponse(BaseModel):
+    vectors: List[VisualizeVector]
+    pca_components: List[List[float]]   # shape: (3, d)
+    pca_mean: List[float]               # shape: (d,)
+    explained_variance_ratio: List[float]
+    collection: str
+    dimension: int
+    count: int
+    projection_method: str
+
+
 # ---------------------------------------------------------------------------
 # Collection endpoints
 # ---------------------------------------------------------------------------
@@ -445,4 +494,208 @@ def health_check():
         collections=len(_collections),
         total_vectors=total,
         timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Embedding model (lazy-loaded)
+# ---------------------------------------------------------------------------
+
+_embedding_model = None
+_embedding_model_name: Optional[str] = None
+
+
+def _get_embedding_model(model_name: str = "all-MiniLM-L6-v2"):
+    global _embedding_model, _embedding_model_name
+    if _embedding_model is None or _embedding_model_name != model_name:
+        try:
+            from sentence_transformers import SentenceTransformer
+            print(f"🔄 Loading embedding model '{model_name}'...")
+            _embedding_model = SentenceTransformer(model_name)
+            _embedding_model_name = model_name
+            print(f"✅ Embedding model '{model_name}' loaded.")
+        except ImportError:
+            raise HTTPException(
+                status_code=501,
+                detail=(
+                    "sentence-transformers is not installed. "
+                    "Run: pip install sentence-transformers"
+                ),
+            )
+    return _embedding_model
+
+
+# ---------------------------------------------------------------------------
+# Embedding endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/embed", response_model=EmbedResponse)
+def embed_texts(req: EmbedRequest):
+    """Embed a list of texts using a sentence transformer model."""
+    if not req.texts:
+        raise HTTPException(status_code=400, detail="texts list must not be empty")
+    model = _get_embedding_model(req.model)
+    try:
+        embeddings = model.encode(req.texts, convert_to_numpy=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Embedding failed: {e}")
+    return EmbedResponse(
+        embeddings=embeddings.tolist(),
+        dimension=int(embeddings.shape[1]),
+        model=req.model,
+        count=len(req.texts),
+    )
+
+
+@app.post("/vectors/embed-upsert", response_model=UpsertResponse)
+def embed_upsert_vectors(req: EmbedUpsertRequest):
+    """Embed texts and upsert the resulting vectors into a collection."""
+    if req.collection not in _collections:
+        raise HTTPException(
+            status_code=404, detail=f"Collection '{req.collection}' not found"
+        )
+    col = _collections[req.collection]
+
+    model = _get_embedding_model(req.model)
+    texts = [item.text for item in req.texts]
+    try:
+        embeddings = model.encode(texts, convert_to_numpy=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Embedding failed: {e}")
+
+    embed_dim = int(embeddings.shape[1])
+    if embed_dim != col.dimension:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Embedding dimension ({embed_dim}) doesn't match collection "
+                f"dimension ({col.dimension}). "
+                f"Create a collection with dimension={embed_dim} to use this model."
+            ),
+        )
+
+    vectors: List[Vector] = []
+    for i, item in enumerate(req.texts):
+        meta = {**item.metadata, "text": item.text, "label": item.text[:80]}
+        vec = Vector(embedding=embeddings[i], metadata=meta)
+        if item.id:
+            vec.id = item.id
+        vectors.append(vec)
+
+    try:
+        ids = col.add(vectors)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    _auto_save_collection(req.collection)
+    return UpsertResponse(ids=ids, count=len(ids))
+
+
+# ---------------------------------------------------------------------------
+# Visualization endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.post("/collections/{name}/visualize", response_model=VisualizeResponse)
+def visualize_collection(name: str, req: VisualizeRequest):
+    """Return vectors projected to 3D via PCA with principal components for query projection."""
+    if name not in _collections:
+        raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
+
+    col = _collections[name]
+    d = col.dimension
+
+    all_vecs = list(col._index._vectors.values())
+    total = len(all_vecs)
+
+    if total == 0:
+        return VisualizeResponse(
+            vectors=[],
+            pca_components=[],
+            pca_mean=[],
+            explained_variance_ratio=[],
+            collection=name,
+            dimension=d,
+            count=0,
+            projection_method="pca",
+        )
+
+    # Random sample up to k (fixed seed for reproducibility)
+    k = min(req.k, total)
+    if k < total:
+        rng = np.random.default_rng(42)
+        indices = rng.choice(total, k, replace=False)
+        selected = [all_vecs[i] for i in indices]
+    else:
+        selected = all_vecs
+
+    n = len(selected)
+    ids = [v.id for v in selected]
+    metadatas = [v.metadata for v in selected]
+
+    X = np.array([v.embedding for v in selected], dtype=np.float64)  # (n, d)
+    mean = X.mean(axis=0)
+    X_centered = X - mean
+
+    if d <= 3:
+        projected = np.zeros((n, 3), dtype=np.float64)
+        projected[:, :d] = X_centered
+        components = np.eye(3, d, dtype=np.float64)
+        evr = [1.0 / 3, 1.0 / 3, 1.0 / 3]
+        method = "identity"
+    else:
+        n_components = min(3, n - 1, d)
+
+        if d > 512 and n < d:
+            # Randomized PCA: project to lower dim first to avoid d×d ops
+            rng2 = np.random.default_rng(42)
+            proj_dim = min(128, n)
+            R = rng2.standard_normal((d, proj_dim))
+            Y = X_centered @ R
+            _, _, Vt_low = np.linalg.svd(Y, full_matrices=False)
+            comp_low = Vt_low[:n_components, :]
+            comps = comp_low @ R.T
+            Q, _ = np.linalg.qr(comps.T)
+            components = Q[:, :n_components].T
+            projected_nc = X_centered @ components.T
+            evr = [1.0 / 3] * 3
+            method = "randomized_pca"
+        else:
+            U, S, Vt = np.linalg.svd(X_centered, full_matrices=False)
+            components = Vt[:n_components, :]
+            projected_nc = X_centered @ components.T
+            total_var = float(np.sum(S ** 2))
+            if total_var > 0:
+                evr = (S[:n_components] ** 2 / total_var).tolist()
+            else:
+                evr = [1.0 / 3] * n_components
+            method = "pca"
+
+        projected = np.zeros((n, 3), dtype=np.float64)
+        projected[:, :n_components] = projected_nc
+
+        if n_components < 3:
+            pad = np.zeros((3 - n_components, d), dtype=np.float64)
+            components = np.vstack([components, pad])
+            evr = evr + [0.0] * (3 - n_components)
+
+    vector_results = [
+        VisualizeVector(
+            id=ids[i],
+            projected=projected[i].tolist(),
+            metadata=metadatas[i],
+        )
+        for i in range(n)
+    ]
+
+    return VisualizeResponse(
+        vectors=vector_results,
+        pca_components=components.tolist(),
+        pca_mean=mean.tolist(),
+        explained_variance_ratio=evr[:3],
+        collection=name,
+        dimension=d,
+        count=n,
+        projection_method=method,
     )

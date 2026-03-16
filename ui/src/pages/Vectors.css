@@ -26,3 +26,64 @@
     white-space: pre-wrap;
     word-break: break-all;
 }
+
+/* Mode tabs */
+.mode-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0;
+}
+
+.mode-tab {
+    padding: 8px 18px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: -1px;
+}
+
+.mode-tab:hover {
+    color: var(--text-secondary);
+}
+
+.mode-tab.active {
+    color: var(--accent-primary, #6366f1);
+    border-bottom-color: var(--accent-primary, #6366f1);
+}
+
+/* Embed info banner */
+.embed-info-banner {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: var(--radius-md, 6px);
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    line-height: 1.6;
+}
+
+/* Embed warning banner */
+.embed-warn-banner {
+    font-size: 0.8rem;
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: var(--radius-md, 6px);
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    line-height: 1.6;
+}
+
+/* Label hints in form labels */
+.label-hint {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    font-weight: 400;
+}
