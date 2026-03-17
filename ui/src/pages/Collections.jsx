@@ -2,10 +2,18 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import './Collections.css';
 
+const DIM_PRESETS = [
+    { dim: 384, label: '384', desc: 'MiniLM / BGE-small' },
+    { dim: 768, label: '768', desc: 'MPNet / BGE-base' },
+    { dim: 1024, label: '1024', desc: 'BGE-large' },
+    { dim: 1536, label: '1536', desc: 'OpenAI ada-002' },
+    { dim: 3072, label: '3072', desc: 'OpenAI text-3-large' },
+];
+
 export default function Collections({ addToast }) {
     const [collections, setCollections] = useState([]);
     const [showModal, setShowModal] = useState(false);
-    const [form, setForm] = useState({ name: '', dimension: 128, metric: 'cosine' });
+    const [form, setForm] = useState({ name: '', dimension: 384, metric: 'cosine' });
     const [loading, setLoading] = useState(false);
 
     const load = () => api.listCollections().then(setCollections).catch(() => { });
@@ -22,7 +30,7 @@ export default function Collections({ addToast }) {
             });
             addToast(`Collection "${form.name}" created`, 'success');
             setShowModal(false);
-            setForm({ name: '', dimension: 128, metric: 'cosine' });
+            setForm({ name: '', dimension: 384, metric: 'cosine' });
             load();
         } catch (err) {
             addToast(err.message, 'error');
@@ -109,8 +117,25 @@ export default function Collections({ addToast }) {
                                 </div>
                                 <div className="form-group">
                                     <label>Dimension</label>
+                                    <div className="dim-presets">
+                                        {DIM_PRESETS.map(p => (
+                                            <button
+                                                key={p.dim}
+                                                type="button"
+                                                className={`dim-preset-btn ${parseInt(form.dimension) === p.dim ? 'active' : ''}`}
+                                                onClick={() => setForm({ ...form, dimension: p.dim })}
+                                                title={p.desc}
+                                            >
+                                                {p.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                     <input className="form-input" type="number" required min="1" max="4096"
-                                        value={form.dimension} onChange={(e) => setForm({ ...form, dimension: e.target.value })} />
+                                        value={form.dimension} onChange={(e) => setForm({ ...form, dimension: e.target.value })}
+                                        style={{ marginTop: 8 }} placeholder="Or enter custom dimension" />
+                                    <span className="dim-hint">
+                                        {DIM_PRESETS.find(p => p.dim === parseInt(form.dimension))?.desc || 'Custom dimension'}
+                                    </span>
                                 </div>
                                 <div className="form-group">
                                     <label>Distance Metric</label>

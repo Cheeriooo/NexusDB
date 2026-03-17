@@ -2,8 +2,15 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import './Vectors.css';
 
-const EMBED_MODEL = 'all-MiniLM-L6-v2';
-const EMBED_DIM = 384;
+const EMBED_MODELS = [
+    { id: 'all-MiniLM-L6-v2', dim: 384, label: 'all-MiniLM-L6-v2', desc: 'Fast, good quality' },
+    { id: 'all-MiniLM-L12-v2', dim: 384, label: 'all-MiniLM-L12-v2', desc: 'Better quality' },
+    { id: 'all-mpnet-base-v2', dim: 768, label: 'all-mpnet-base-v2', desc: 'Best quality, slower' },
+    { id: 'paraphrase-MiniLM-L6-v2', dim: 384, label: 'paraphrase-MiniLM-L6-v2', desc: 'Paraphrase tasks' },
+    { id: 'BAAI/bge-small-en-v1.5', dim: 384, label: 'bge-small-en-v1.5', desc: 'BGE small English' },
+    { id: 'BAAI/bge-base-en-v1.5', dim: 768, label: 'bge-base-en-v1.5', desc: 'BGE base English' },
+    { id: 'BAAI/bge-large-en-v1.5', dim: 1024, label: 'bge-large-en-v1.5', desc: 'BGE large English' },
+];
 
 export default function Vectors({ addToast }) {
     const [collections, setCollections] = useState([]);
@@ -16,6 +23,7 @@ export default function Vectors({ addToast }) {
     // Embed mode
     const [textInput, setTextInput] = useState('');
     const [idPrefix, setIdPrefix] = useState('');
+    const [embedModel, setEmbedModel] = useState(EMBED_MODELS[0].id);
 
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -28,7 +36,8 @@ export default function Vectors({ addToast }) {
     }, []);
 
     const selectedCol = collections.find((c) => c.name === selected);
-    const dimMismatch = mode === 'embed' && selectedCol && selectedCol.dimension !== EMBED_DIM;
+    const currentModel = EMBED_MODELS.find(m => m.id === embedModel) || EMBED_MODELS[0];
+    const dimMismatch = mode === 'embed' && selectedCol && selectedCol.dimension !== currentModel.dim;
 
     const generateSample = () => {
         if (!selectedCol) return;
@@ -74,7 +83,7 @@ export default function Vectors({ addToast }) {
             const res = await api.embedUpsert({
                 collection: selected,
                 texts,
-                model: EMBED_MODEL,
+                model: embedModel,
             });
             setResult(res);
             addToast(`Embedded & inserted ${res.count} vectors`, 'success');
@@ -158,20 +167,37 @@ export default function Vectors({ addToast }) {
                     {/* ---- Embed mode ---- */}
                     {mode === 'embed' && (
                         <form onSubmit={handleEmbedUpsert}>
-                            {/* Info banner */}
+                            {/* Model selector */}
+                            <div className="form-group" style={{ marginTop: '16px' }}>
+                                <label>Embedding Model</label>
+                                <select
+                                    className="form-select"
+                                    value={embedModel}
+                                    onChange={(e) => setEmbedModel(e.target.value)}
+                                >
+                                    {EMBED_MODELS.map((m) => (
+                                        <option key={m.id} value={m.id}>
+                                            {m.label} — {m.dim}D — {m.desc}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Model info banner */}
                             <div className="embed-info-banner">
-                                <strong>Model:</strong> {EMBED_MODEL} &nbsp;|&nbsp;
-                                <strong>Output dim:</strong> {EMBED_DIM}
+                                <strong>Model:</strong> {currentModel.label} &nbsp;|&nbsp;
+                                <strong>Output dim:</strong> {currentModel.dim} &nbsp;|&nbsp;
+                                <strong>{currentModel.desc}</strong>
                                 <br />
-                                Each line of text below will be embedded into a {EMBED_DIM}-dim vector and upserted.
+                                Each line of text below will be embedded into a {currentModel.dim}-dim vector and upserted.
                             </div>
 
                             {/* Dimension warning */}
                             {dimMismatch && (
                                 <div className="embed-warn-banner">
                                     ⚠ Collection <strong>{selected}</strong> has dimension {selectedCol.dimension}, but{' '}
-                                    {EMBED_MODEL} produces {EMBED_DIM}-dim vectors.{' '}
-                                    Please create a collection with dimension={EMBED_DIM}.
+                                    {currentModel.label} produces {currentModel.dim}-dim vectors.{' '}
+                                    Create a collection with dimension={currentModel.dim}, or pick a different model.
                                 </div>
                             )}
 
