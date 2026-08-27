@@ -3,7 +3,7 @@
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -15,7 +15,7 @@ class SQLiteBackend:
 
     def __init__(self, db_path: str | Path):
         """Initialize SQLite backend.
-        
+
         Args:
             db_path: Path to SQLite database file.
         """
@@ -26,8 +26,7 @@ class SQLiteBackend:
     def _init_db(self) -> None:
         """Initialize database schema."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS vectors (
                     id TEXT PRIMARY KEY,
                     embedding BLOB NOT NULL,
@@ -35,16 +34,13 @@ class SQLiteBackend:
                     created_at TEXT,
                     updated_at TEXT
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS collection_metadata (
                     key TEXT PRIMARY KEY,
                     value TEXT
                 )
-                """
-            )
+                """)
             conn.commit()
 
     def save_collection(
@@ -52,12 +48,12 @@ class SQLiteBackend:
         collection_name: str,
         dimension: int,
         metric: str,
-        vectors: List[Vector],
+        vectors: list[Vector],
         created_at: str,
         updated_at: str,
     ) -> None:
         """Save collection to SQLite.
-        
+
         Args:
             collection_name: Name of the collection.
             dimension: Vector dimensionality.
@@ -108,9 +104,9 @@ class SQLiteBackend:
 
     def load_collection(
         self,
-    ) -> tuple[Dict[str, Any], List[Vector]] | tuple[None, None]:
+    ) -> tuple[dict[str, Any], list[Vector]] | tuple[None, None]:
         """Load collection from SQLite.
-        
+
         Returns:
             Tuple of (collection_metadata_dict, list_of_vectors) or (None, None) if empty.
         """
@@ -132,11 +128,9 @@ class SQLiteBackend:
             }
 
             # Load vectors
-            cursor = conn.execute(
-                """
+            cursor = conn.execute("""
                 SELECT id, embedding, metadata, created_at, updated_at FROM vectors
-                """
-            )
+                """)
             vectors = []
             for row in cursor.fetchall():
                 vec_id, embedding_bytes, metadata_json, created_at, updated_at = row
@@ -158,6 +152,7 @@ class SQLiteBackend:
                 # Restore timestamp if available
                 if created_at:
                     from datetime import datetime
+
                     vec.timestamp = datetime.fromisoformat(created_at)
 
                 vectors.append(vec)

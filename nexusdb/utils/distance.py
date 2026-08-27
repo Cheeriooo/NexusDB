@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 
@@ -100,7 +100,5 @@ def get_distance_fn(metric: str) -> Callable[[np.ndarray, np.ndarray], np.ndarra
     """
     metric = metric.lower().strip()
     if metric not in _METRIC_REGISTRY:
-        raise ValueError(
-            f"Unknown metric '{metric}'. Supported: {SUPPORTED_METRICS}"
-        )
+        raise ValueError(f"Unknown metric '{metric}'. Supported: {SUPPORTED_METRICS}")
     return _METRIC_REGISTRY[metric]

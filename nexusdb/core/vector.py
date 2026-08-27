@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 
@@ -24,8 +24,8 @@ class Vector:
 
     embedding: np.ndarray
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    metadata: dict[str, Any] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     collection: str = ""
 
     def __post_init__(self) -> None:
@@ -43,9 +43,7 @@ class Vector:
 
         # Validate dimensions
         if self.embedding.ndim != 1:
-            raise ValueError(
-                f"embedding must be 1-dimensional, got {self.embedding.ndim}D"
-            )
+            raise ValueError(f"embedding must be 1-dimensional, got {self.embedding.ndim}D")
         if len(self.embedding) == 0:
             raise ValueError("embedding must not be empty")
 
@@ -54,7 +52,7 @@ class Vector:
         """Return the dimensionality of this vector."""
         return len(self.embedding)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize the vector to a dictionary."""
         return {
             "id": self.id,
@@ -66,14 +64,14 @@ class Vector:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Vector:
+    def from_dict(cls, data: dict[str, Any]) -> Vector:
         """Deserialize a vector from a dictionary."""
         embedding = np.array(data["embedding"], dtype=np.float32)
         timestamp = data.get("timestamp")
         if isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp)
         elif timestamp is None:
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
 
         return cls(
             id=data.get("id", str(uuid.uuid4())),
@@ -84,7 +82,4 @@ class Vector:
         )
 
     def __repr__(self) -> str:
-        return (
-            f"Vector(id='{self.id}', dim={self.dimension}, "
-            f"collection='{self.collection}')"
-        )
+        return f"Vector(id='{self.id}', dim={self.dimension}, " f"collection='{self.collection}')"

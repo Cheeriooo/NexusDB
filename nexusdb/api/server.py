@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -34,7 +34,7 @@ app.add_middleware(
 )
 
 # In-memory store of collections
-_collections: Dict[str, Collection] = {}
+_collections: dict[str, Collection] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -47,14 +47,13 @@ async def startup_event():
     """Load persisted collections on startup if auto-persist is enabled."""
     if not AUTO_PERSIST:
         return
-    
+
     from nexusdb.persistence.config import PERSIST_DIR
-    
+
     # Find all .db files in persist directory
     if PERSIST_DIR.exists():
         for db_file in PERSIST_DIR.glob("*.db"):
             try:
-                collection_name = db_file.stem  # filename without .db
                 col = Collection.load(db_file)
                 if col:
                     _collections[col.name] = col
@@ -68,7 +67,7 @@ async def shutdown_event():
     """Save all collections on shutdown if auto-persist is enabled."""
     if not AUTO_PERSIST:
         return
-    
+
     for name, col in _collections.items():
         try:
             db_path = get_collection_db_path(name)
@@ -82,7 +81,7 @@ def _auto_save_collection(collection_name: str) -> None:
     """Helper to auto-save a collection if AUTO_PERSIST is enabled."""
     if not AUTO_PERSIST or collection_name not in _collections:
         return
-    
+
     try:
         col = _collections[collection_name]
         db_path = get_collection_db_path(collection_name)
@@ -112,23 +111,23 @@ class CollectionInfo(BaseModel):
 
 
 class VectorData(BaseModel):
-    id: Optional[str] = None
-    values: List[float]
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    id: str | None = None
+    values: list[float]
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class UpsertRequest(BaseModel):
-    vectors: List[VectorData]
+    vectors: list[VectorData]
     collection: str
 
 
 class UpsertResponse(BaseModel):
-    ids: List[str]
+    ids: list[str]
     count: int
 
 
 class SearchRequest(BaseModel):
-    vector: List[float]
+    vector: list[float]
     k: int = 10
     collection: str
     include_metadata: bool = True
@@ -138,20 +137,20 @@ class SearchRequest(BaseModel):
 class SearchMatch(BaseModel):
     id: str
     distance: float
-    metadata: Optional[Dict[str, Any]] = None
-    values: Optional[List[float]] = None
+    metadata: dict[str, Any] | None = None
+    values: list[float] | None = None
 
 
 class SearchResponse(BaseModel):
-    matches: List[SearchMatch]
+    matches: list[SearchMatch]
     collection: str
     query_dimension: int
 
 
 class VectorResponse(BaseModel):
     id: str
-    values: List[float]
-    metadata: Dict[str, Any]
+    values: list[float]
+    metadata: dict[str, Any]
     collection: str
     dimension: int
 
@@ -169,7 +168,7 @@ class SaveCollectionResponse(BaseModel):
 
 class LoadCollectionRequest(BaseModel):
     filepath: str
-    collection_name: Optional[str] = None  # Override loaded name if provided
+    collection_name: str | None = None  # Override loaded name if provided
 
 
 class LoadCollectionResponse(BaseModel):
@@ -189,13 +188,14 @@ class HealthResponse(BaseModel):
 
 # --- Embedding models ---
 
+
 class EmbedRequest(BaseModel):
-    texts: List[str]
+    texts: list[str]
     model: str = "all-MiniLM-L6-v2"
 
 
 class EmbedResponse(BaseModel):
-    embeddings: List[List[float]]
+    embeddings: list[list[float]]
     dimension: int
     model: str
     count: int
@@ -203,17 +203,18 @@ class EmbedResponse(BaseModel):
 
 class EmbedUpsertItem(BaseModel):
     text: str
-    id: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class EmbedUpsertRequest(BaseModel):
     collection: str
-    texts: List[EmbedUpsertItem]
+    texts: list[EmbedUpsertItem]
     model: str = "all-MiniLM-L6-v2"
 
 
 # --- Visualization models ---
+
 
 class VisualizeRequest(BaseModel):
     k: int = 500
@@ -221,15 +222,15 @@ class VisualizeRequest(BaseModel):
 
 class VisualizeVector(BaseModel):
     id: str
-    projected: List[float]   # [x, y, z]
-    metadata: Dict[str, Any]
+    projected: list[float]  # [x, y, z]
+    metadata: dict[str, Any]
 
 
 class VisualizeResponse(BaseModel):
-    vectors: List[VisualizeVector]
-    pca_components: List[List[float]]   # shape: (3, d)
-    pca_mean: List[float]               # shape: (d,)
-    explained_variance_ratio: List[float]
+    vectors: list[VisualizeVector]
+    pca_components: list[list[float]]  # shape: (3, d)
+    pca_mean: list[float]  # shape: (d,)
+    explained_variance_ratio: list[float]
     collection: str
     dimension: int
     count: int
@@ -250,10 +251,10 @@ def create_collection(req: CollectionCreate):
     try:
         col = Collection(name=req.name, dimension=req.dimension, metric=req.metric)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     _collections[req.name] = col
-    
+
     # Auto-save if enabled
     if AUTO_PERSIST:
         try:
@@ -261,11 +262,11 @@ def create_collection(req: CollectionCreate):
             col.save(db_path)
         except Exception as e:
             print(f"⚠️  Failed to auto-save collection {req.name}: {e}")
-    
+
     return CollectionInfo(**col.info())
 
 
-@app.get("/collections", response_model=List[CollectionInfo])
+@app.get("/collections", response_model=list[CollectionInfo])
 def list_collections():
     """List all collections."""
     return [CollectionInfo(**col.info()) for col in _collections.values()]
@@ -284,19 +285,20 @@ def delete_collection(name: str):
     """Delete a collection and all its vectors."""
     if name not in _collections:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
-    
+
     del _collections[name]
-    
+
     # Clean up persisted data if enabled
     if AUTO_PERSIST:
         try:
             import os
+
             db_path = get_collection_db_path(name)
             if db_path.exists():
                 os.remove(db_path)
         except Exception as e:
             print(f"⚠️  Failed to delete persisted data for {name}: {e}")
-    
+
     return {"message": f"Collection '{name}' deleted"}
 
 
@@ -309,13 +311,11 @@ def delete_collection(name: str):
 def upsert_vectors(req: UpsertRequest):
     """Add or update vectors in a collection."""
     if req.collection not in _collections:
-        raise HTTPException(
-            status_code=404, detail=f"Collection '{req.collection}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Collection '{req.collection}' not found")
 
     col = _collections[req.collection]
 
-    vectors: List[Vector] = []
+    vectors: list[Vector] = []
     for vd in req.vectors:
         try:
             vec = Vector(
@@ -328,12 +328,12 @@ def upsert_vectors(req: UpsertRequest):
                 vec.id = vd.id
             vectors.append(vec)
         except (ValueError, TypeError) as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
     try:
         ids = col.add(vectors)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     # Auto-save if enabled
     _auto_save_collection(req.collection)
@@ -345,9 +345,7 @@ def upsert_vectors(req: UpsertRequest):
 def search_vectors(req: SearchRequest):
     """Search for nearest-neighbor vectors."""
     if req.collection not in _collections:
-        raise HTTPException(
-            status_code=404, detail=f"Collection '{req.collection}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Collection '{req.collection}' not found")
 
     col = _collections[req.collection]
 
@@ -355,12 +353,12 @@ def search_vectors(req: SearchRequest):
         raise HTTPException(
             status_code=400,
             detail=f"Query dimension {len(req.vector)} doesn't match "
-                   f"collection dimension {col.dimension}",
+            f"collection dimension {col.dimension}",
         )
 
     results = col.search(req.vector, k=req.k)
 
-    matches: List[SearchMatch] = []
+    matches: list[SearchMatch] = []
     for r in results:
         match = SearchMatch(id=r.id, distance=r.distance)
         if req.include_metadata and r.vector:
@@ -380,15 +378,11 @@ def search_vectors(req: SearchRequest):
 def get_vector(collection: str, vector_id: str):
     """Get a specific vector by ID."""
     if collection not in _collections:
-        raise HTTPException(
-            status_code=404, detail=f"Collection '{collection}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
 
     vec = _collections[collection].get(vector_id)
     if vec is None:
-        raise HTTPException(
-            status_code=404, detail=f"Vector '{vector_id}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Vector '{vector_id}' not found")
 
     return VectorResponse(
         id=vec.id,
@@ -403,15 +397,11 @@ def get_vector(collection: str, vector_id: str):
 def delete_vector(collection: str, vector_id: str):
     """Delete a vector by ID."""
     if collection not in _collections:
-        raise HTTPException(
-            status_code=404, detail=f"Collection '{collection}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
 
     removed = _collections[collection].delete(vector_id)
     if not removed:
-        raise HTTPException(
-            status_code=404, detail=f"Vector '{vector_id}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Vector '{vector_id}' not found")
 
     # Auto-save if enabled
     _auto_save_collection(collection)
@@ -439,7 +429,7 @@ def save_collection(name: str, req: SaveCollectionRequest):
             filepath=req.filepath,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save collection: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save collection: {e}") from e
 
 
 @app.post("/collections/load", response_model=LoadCollectionResponse)
@@ -469,14 +459,14 @@ def load_collection(req: LoadCollectionRequest):
         _collections[col.name] = col
 
         return LoadCollectionResponse(
-            message=f"Collection loaded successfully",
+            message="Collection loaded successfully",
             collection=col.name,
             vector_count=col.count,
         )
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load collection: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load collection: {e}") from e
 
 
 # ---------------------------------------------------------------------------
@@ -493,7 +483,7 @@ def health_check():
         version="0.1.0",
         collections=len(_collections),
         total_vectors=total,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
 
@@ -502,7 +492,7 @@ def health_check():
 # ---------------------------------------------------------------------------
 
 _embedding_model = None
-_embedding_model_name: Optional[str] = None
+_embedding_model_name: str | None = None
 
 
 def _get_embedding_model(model_name: str = "all-MiniLM-L6-v2"):
@@ -510,18 +500,19 @@ def _get_embedding_model(model_name: str = "all-MiniLM-L6-v2"):
     if _embedding_model is None or _embedding_model_name != model_name:
         try:
             from sentence_transformers import SentenceTransformer
+
             print(f"🔄 Loading embedding model '{model_name}'...")
             _embedding_model = SentenceTransformer(model_name)
             _embedding_model_name = model_name
             print(f"✅ Embedding model '{model_name}' loaded.")
-        except ImportError:
+        except ImportError as e:
             raise HTTPException(
                 status_code=501,
                 detail=(
                     "sentence-transformers is not installed. "
                     "Run: pip install sentence-transformers"
                 ),
-            )
+            ) from e
     return _embedding_model
 
 
@@ -539,7 +530,7 @@ def embed_texts(req: EmbedRequest):
     try:
         embeddings = model.encode(req.texts, convert_to_numpy=True)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Embedding failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Embedding failed: {e}") from e
     return EmbedResponse(
         embeddings=embeddings.tolist(),
         dimension=int(embeddings.shape[1]),
@@ -552,9 +543,7 @@ def embed_texts(req: EmbedRequest):
 def embed_upsert_vectors(req: EmbedUpsertRequest):
     """Embed texts and upsert the resulting vectors into a collection."""
     if req.collection not in _collections:
-        raise HTTPException(
-            status_code=404, detail=f"Collection '{req.collection}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Collection '{req.collection}' not found")
     col = _collections[req.collection]
 
     model = _get_embedding_model(req.model)
@@ -562,7 +551,7 @@ def embed_upsert_vectors(req: EmbedUpsertRequest):
     try:
         embeddings = model.encode(texts, convert_to_numpy=True)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Embedding failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Embedding failed: {e}") from e
 
     embed_dim = int(embeddings.shape[1])
     if embed_dim != col.dimension:
@@ -575,7 +564,7 @@ def embed_upsert_vectors(req: EmbedUpsertRequest):
             ),
         )
 
-    vectors: List[Vector] = []
+    vectors: list[Vector] = []
     for i, item in enumerate(req.texts):
         meta = {**item.metadata, "text": item.text, "label": item.text[:80]}
         vec = Vector(embedding=embeddings[i], metadata=meta)
@@ -586,7 +575,7 @@ def embed_upsert_vectors(req: EmbedUpsertRequest):
     try:
         ids = col.add(vectors)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     _auto_save_collection(req.collection)
     return UpsertResponse(ids=ids, count=len(ids))
@@ -665,7 +654,7 @@ def visualize_collection(name: str, req: VisualizeRequest):
             U, S, Vt = np.linalg.svd(X_centered, full_matrices=False)
             components = Vt[:n_components, :]
             projected_nc = X_centered @ components.T
-            total_var = float(np.sum(S ** 2))
+            total_var = float(np.sum(S**2))
             if total_var > 0:
                 evr = (S[:n_components] ** 2 / total_var).tolist()
             else:

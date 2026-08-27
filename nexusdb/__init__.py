@@ -2,8 +2,8 @@
 
 __version__ = "0.1.0"
 
-from nexusdb.core.vector import Vector
 from nexusdb.core.collection import Collection
 from nexusdb.core.index.flat_index import FlatIndex
+from nexusdb.core.vector import Vector
 
 __all__ = ["Vector", "Collection", "FlatIndex"]

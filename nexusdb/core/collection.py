@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -39,7 +39,7 @@ class Collection:
         self.name = name.strip()
         self.dimension = dimension
         self.metric = metric
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.updated_at = self.created_at
 
         self._index = FlatIndex(dimension=dimension, metric=metric)
@@ -49,7 +49,7 @@ class Collection:
     # CRUD Operations
     # ------------------------------------------------------------------
 
-    def add(self, vectors: List[Vector]) -> List[str]:
+    def add(self, vectors: list[Vector]) -> list[str]:
         """Add (or upsert) vectors into this collection.
 
         Args:
@@ -63,10 +63,10 @@ class Collection:
             vec.collection = self.name
         with self._lock:
             ids = self._index.add(vectors)
-            self.updated_at = datetime.now(timezone.utc)
+            self.updated_at = datetime.now(UTC)
         return ids
 
-    def get(self, vector_id: str) -> Optional[Vector]:
+    def get(self, vector_id: str) -> Vector | None:
         """Get a vector by ID."""
         return self._index.get(vector_id)
 
@@ -79,14 +79,14 @@ class Collection:
         with self._lock:
             removed = self._index.remove(vector_id)
             if removed:
-                self.updated_at = datetime.now(timezone.utc)
+                self.updated_at = datetime.now(UTC)
             return removed
 
     def search(
         self,
-        query: List[float] | np.ndarray,
+        query: list[float] | np.ndarray,
         k: int = 10,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """Search for nearest neighbors.
 
         Args:
@@ -109,7 +109,7 @@ class Collection:
         """Number of vectors in this collection."""
         return self._index.size
 
-    def info(self) -> Dict[str, Any]:
+    def info(self) -> dict[str, Any]:
         """Return metadata about this collection."""
         return {
             "name": self.name,
@@ -124,21 +124,21 @@ class Collection:
         """Remove all vectors from this collection."""
         with self._lock:
             self._index.clear()
-            self.updated_at = datetime.now(timezone.utc)
+            self.updated_at = datetime.now(UTC)
 
     def save(self, filepath: str | Path) -> None:
         """Save collection to SQLite database file.
-        
+
         Args:
             filepath: Path to save the collection to.
         """
         from nexusdb.persistence import SQLiteBackend
-        
+
         backend = SQLiteBackend(filepath)
-        
+
         # Get all vectors from index
         vectors_to_save = list(self._index._vectors.values())
-        
+
         backend.save_collection(
             collection_name=self.name,
             dimension=self.dimension,
@@ -149,44 +149,44 @@ class Collection:
         )
 
     @classmethod
-    def load(cls, filepath: str | Path) -> Optional[Collection]:
+    def load(cls, filepath: str | Path) -> Collection | None:
         """Load collection from SQLite database file.
-        
+
         Args:
             filepath: Path to load the collection from.
-            
+
         Returns:
             Collection object or None if file doesn't exist or is empty.
         """
         from nexusdb.persistence import SQLiteBackend
-        
+
         filepath = Path(filepath)
         if not filepath.exists():
             return None
-        
+
         backend = SQLiteBackend(filepath)
         collection_info, vectors = backend.load_collection()
-        
+
         if collection_info is None:
             return None
-        
+
         # Create collection
         collection = cls(
             name=collection_info["name"],
             dimension=collection_info["dimension"],
             metric=collection_info["metric"],
         )
-        
+
         # Restore timestamps
         if collection_info["created_at"]:
             collection.created_at = datetime.fromisoformat(collection_info["created_at"])
         if collection_info["updated_at"]:
             collection.updated_at = datetime.fromisoformat(collection_info["updated_at"])
-        
+
         # Add vectors back to collection
         if vectors:
             collection.add(vectors)
-        
+
         return collection
 
     def __repr__(self) -> str:

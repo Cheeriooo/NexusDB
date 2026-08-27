@@ -208,4 +208,14 @@ __marimo__/
 
 # NexusDB internal context files
 DOCUMENT.md
+
+# NexusDB persisted collections
+data/
+*.db
+
+# Node / frontend
+node_modules/
+ui/dist/
+ui/.vite/
+ui-dist/
 AGENT.md

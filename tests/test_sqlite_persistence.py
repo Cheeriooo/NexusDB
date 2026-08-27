@@ -56,4 +56,5 @@ def test_save_and_load():
     finally:
         # Clean up
         import shutil
+
         shutil.rmtree(tmpdir, ignore_errors=True)

@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from nexusdb.core.index.flat_index import FlatIndex, SearchResult
+from nexusdb.core.index.flat_index import FlatIndex
 from nexusdb.core.vector import Vector
 
 
@@ -89,11 +89,13 @@ class TestFlatIndexSearch:
 
     def test_search_cosine_nearest(self):
         idx = FlatIndex(dimension=2, metric="cosine")
-        idx.add([
-            Vector(embedding=[1.0, 0.0], id="right"),
-            Vector(embedding=[0.0, 1.0], id="up"),
-            Vector(embedding=[-1.0, 0.0], id="left"),
-        ])
+        idx.add(
+            [
+                Vector(embedding=[1.0, 0.0], id="right"),
+                Vector(embedding=[0.0, 1.0], id="up"),
+                Vector(embedding=[-1.0, 0.0], id="left"),
+            ]
+        )
         query = np.array([0.9, 0.1], dtype=np.float32)
         results = idx.search(query, k=1)
         assert len(results) == 1
@@ -101,20 +103,24 @@ class TestFlatIndexSearch:
 
     def test_search_euclidean(self):
         idx = FlatIndex(dimension=2, metric="euclidean")
-        idx.add([
-            Vector(embedding=[0.0, 0.0], id="origin"),
-            Vector(embedding=[10.0, 10.0], id="far"),
-        ])
+        idx.add(
+            [
+                Vector(embedding=[0.0, 0.0], id="origin"),
+                Vector(embedding=[10.0, 10.0], id="far"),
+            ]
+        )
         query = np.array([1.0, 1.0], dtype=np.float32)
         results = idx.search(query, k=1)
         assert results[0].id == "origin"
 
     def test_search_dot_product(self):
         idx = FlatIndex(dimension=2, metric="dot")
-        idx.add([
-            Vector(embedding=[1.0, 0.0], id="a"),
-            Vector(embedding=[0.0, 1.0], id="b"),
-        ])
+        idx.add(
+            [
+                Vector(embedding=[1.0, 0.0], id="a"),
+                Vector(embedding=[0.0, 1.0], id="b"),
+            ]
+        )
         query = np.array([5.0, 0.0], dtype=np.float32)
         results = idx.search(query, k=1)
         assert results[0].id == "a"
@@ -144,11 +150,13 @@ class TestFlatIndexSearch:
 
     def test_search_results_sorted(self):
         idx = FlatIndex(dimension=2, metric="euclidean")
-        idx.add([
-            Vector(embedding=[10.0, 0.0], id="far"),
-            Vector(embedding=[1.0, 0.0], id="near"),
-            Vector(embedding=[5.0, 0.0], id="mid"),
-        ])
+        idx.add(
+            [
+                Vector(embedding=[10.0, 0.0], id="far"),
+                Vector(embedding=[1.0, 0.0], id="near"),
+                Vector(embedding=[5.0, 0.0], id="mid"),
+            ]
+        )
         query = np.array([0.0, 0.0], dtype=np.float32)
         results = idx.search(query, k=3)
         assert results[0].id == "near"
@@ -157,11 +165,13 @@ class TestFlatIndexSearch:
 
     def test_search_with_filter(self):
         idx = FlatIndex(dimension=2, metric="euclidean")
-        idx.add([
-            Vector(embedding=[1.0, 0.0], id="a"),
-            Vector(embedding=[0.0, 1.0], id="b"),
-            Vector(embedding=[0.5, 0.5], id="c"),
-        ])
+        idx.add(
+            [
+                Vector(embedding=[1.0, 0.0], id="a"),
+                Vector(embedding=[0.0, 1.0], id="b"),
+                Vector(embedding=[0.5, 0.5], id="c"),
+            ]
+        )
         query = np.array([1.0, 0.0], dtype=np.float32)
         results = idx.search(query, k=1, ids_filter={"b", "c"})
         assert results[0].id == "c"

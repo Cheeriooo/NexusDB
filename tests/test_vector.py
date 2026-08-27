@@ -75,9 +75,7 @@ class TestVectorSerialization:
         assert restored.collection == original.collection
         assert restored.metadata == original.metadata
         assert restored.dimension == original.dimension
-        np.testing.assert_array_almost_equal(
-            restored.embedding, original.embedding
-        )
+        np.testing.assert_array_almost_equal(restored.embedding, original.embedding)
 
     def test_to_dict_fields(self):
         v = Vector(embedding=[1.0, 2.0], id="abc")

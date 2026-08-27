@@ -1,0 +1,13 @@
+.git
+.github
+docs
+tests
+data
+*.db
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+venv
+ui
+install.cmd

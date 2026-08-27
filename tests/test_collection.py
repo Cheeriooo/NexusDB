@@ -78,10 +78,12 @@ class TestCollectionCRUD:
 
     def test_clear(self):
         col = Collection(name="test", dimension=2)
-        col.add([
-            Vector(embedding=[1.0, 0.0], id="v1"),
-            Vector(embedding=[0.0, 1.0], id="v2"),
-        ])
+        col.add(
+            [
+                Vector(embedding=[1.0, 0.0], id="v1"),
+                Vector(embedding=[0.0, 1.0], id="v2"),
+            ]
+        )
         col.clear()
         assert col.count == 0
 
@@ -90,10 +92,12 @@ class TestCollectionSearch:
 
     def test_search_basic(self):
         col = Collection(name="test", dimension=2, metric="cosine")
-        col.add([
-            Vector(embedding=[1.0, 0.0], id="right"),
-            Vector(embedding=[0.0, 1.0], id="up"),
-        ])
+        col.add(
+            [
+                Vector(embedding=[1.0, 0.0], id="right"),
+                Vector(embedding=[0.0, 1.0], id="up"),
+            ]
+        )
         results = col.search([0.9, 0.1], k=1)
         assert len(results) == 1
         assert results[0].id == "right"

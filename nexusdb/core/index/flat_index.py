@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -18,7 +17,7 @@ class SearchResult:
 
     id: str
     distance: float
-    vector: Optional[Vector] = None
+    vector: Vector | None = None
 
 
 class FlatIndex:
@@ -41,9 +40,9 @@ class FlatIndex:
         self._distance_fn = get_distance_fn(metric)
 
         # Storage
-        self._vectors: Dict[str, Vector] = {}   # id → Vector
-        self._matrix: Optional[np.ndarray] = None  # (N, D) dense matrix
-        self._id_list: List[str] = []            # ordered list of IDs matching matrix rows
+        self._vectors: dict[str, Vector] = {}  # id → Vector
+        self._matrix: np.ndarray | None = None  # (N, D) dense matrix
+        self._id_list: list[str] = []  # ordered list of IDs matching matrix rows
 
         self._lock = threading.Lock()
         self._dirty = False  # True when _matrix needs rebuild
@@ -57,7 +56,7 @@ class FlatIndex:
         """Number of vectors in the index."""
         return len(self._vectors)
 
-    def add(self, vectors: List[Vector]) -> List[str]:
+    def add(self, vectors: list[Vector]) -> list[str]:
         """Add vectors to the index. If a vector with the same ID exists, it is updated.
 
         Args:
@@ -69,7 +68,7 @@ class FlatIndex:
         Raises:
             ValueError: If any vector has a mismatched dimension.
         """
-        ids: List[str] = []
+        ids: list[str] = []
         with self._lock:
             for vec in vectors:
                 if vec.dimension != self.dimension:
@@ -82,7 +81,7 @@ class FlatIndex:
                 self._dirty = True
         return ids
 
-    def get(self, vector_id: str) -> Optional[Vector]:
+    def get(self, vector_id: str) -> Vector | None:
         """Retrieve a vector by its ID."""
         return self._vectors.get(vector_id)
 
@@ -103,8 +102,8 @@ class FlatIndex:
         self,
         query: np.ndarray,
         k: int = 10,
-        ids_filter: Optional[set] = None,
-    ) -> List[SearchResult]:
+        ids_filter: set | None = None,
+    ) -> list[SearchResult]:
         """Find the k nearest neighbors to the query vector.
 
         Args:
@@ -117,8 +116,7 @@ class FlatIndex:
         """
         if query.ndim != 1 or len(query) != self.dimension:
             raise ValueError(
-                f"Query must be 1D with dimension {self.dimension}, "
-                f"got shape {query.shape}"
+                f"Query must be 1D with dimension {self.dimension}, " f"got shape {query.shape}"
             )
 
         with self._lock:
@@ -137,7 +135,7 @@ class FlatIndex:
             if not mask.any():
                 return []
             matrix = matrix[mask]
-            id_list = [vid for vid, m in zip(id_list, mask) if m]
+            id_list = [vid for vid, m in zip(id_list, mask, strict=True) if m]
 
         # Compute distances
         distances = self._distance_fn(query.astype(np.float32), matrix)
@@ -154,7 +152,7 @@ class FlatIndex:
             top_k_indices = np.argpartition(distances, k)[:k]
             top_k_indices = top_k_indices[np.argsort(distances[top_k_indices])]
 
-        results: List[SearchResult] = []
+        results: list[SearchResult] = []
         for idx in top_k_indices:
             vid = id_list[idx]
             results.append(
@@ -188,7 +186,7 @@ class FlatIndex:
             return
 
         self._id_list = list(self._vectors.keys())
-        self._matrix = np.vstack(
-            [self._vectors[vid].embedding for vid in self._id_list]
-        ).astype(np.float32)
+        self._matrix = np.vstack([self._vectors[vid].embedding for vid in self._id_list]).astype(
+            np.float32
+        )
         self._dirty = False

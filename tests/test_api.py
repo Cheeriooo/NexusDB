@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from nexusdb.api.server import app, _collections
+from nexusdb.api.server import _collections, app
 
 
 @pytest.fixture(autouse=True)
@@ -21,6 +21,7 @@ client = TestClient(app)
 # Health
 # ------------------------------------------------------------------
 
+
 class TestHealth:
 
     def test_health(self):
@@ -37,14 +38,18 @@ class TestHealth:
 # Collections
 # ------------------------------------------------------------------
 
+
 class TestCollections:
 
     def test_create_collection(self):
-        r = client.post("/collections", json={
-            "name": "docs",
-            "dimension": 128,
-            "metric": "cosine",
-        })
+        r = client.post(
+            "/collections",
+            json={
+                "name": "docs",
+                "dimension": 128,
+                "metric": "cosine",
+            },
+        )
         assert r.status_code == 201
         data = r.json()
         assert data["name"] == "docs"
@@ -89,6 +94,7 @@ class TestCollections:
 # Vectors
 # ------------------------------------------------------------------
 
+
 class TestVectors:
 
     def _create_collection(self, name="test", dim=4):
@@ -96,39 +102,51 @@ class TestVectors:
 
     def test_upsert(self):
         self._create_collection()
-        r = client.post("/vectors/upsert", json={
-            "collection": "test",
-            "vectors": [
-                {"id": "v1", "values": [1.0, 0.0, 0.0, 0.0]},
-                {"id": "v2", "values": [0.0, 1.0, 0.0, 0.0]},
-            ],
-        })
+        r = client.post(
+            "/vectors/upsert",
+            json={
+                "collection": "test",
+                "vectors": [
+                    {"id": "v1", "values": [1.0, 0.0, 0.0, 0.0]},
+                    {"id": "v2", "values": [0.0, 1.0, 0.0, 0.0]},
+                ],
+            },
+        )
         assert r.status_code == 200
         data = r.json()
         assert data["count"] == 2
         assert "v1" in data["ids"]
 
     def test_upsert_missing_collection(self):
-        r = client.post("/vectors/upsert", json={
-            "collection": "nope",
-            "vectors": [{"values": [1.0]}],
-        })
+        r = client.post(
+            "/vectors/upsert",
+            json={
+                "collection": "nope",
+                "vectors": [{"values": [1.0]}],
+            },
+        )
         assert r.status_code == 404
 
     def test_upsert_wrong_dimension(self):
         self._create_collection(dim=4)
-        r = client.post("/vectors/upsert", json={
-            "collection": "test",
-            "vectors": [{"id": "bad", "values": [1.0, 2.0]}],
-        })
+        r = client.post(
+            "/vectors/upsert",
+            json={
+                "collection": "test",
+                "vectors": [{"id": "bad", "values": [1.0, 2.0]}],
+            },
+        )
         assert r.status_code == 400
 
     def test_get_vector(self):
         self._create_collection()
-        client.post("/vectors/upsert", json={
-            "collection": "test",
-            "vectors": [{"id": "v1", "values": [1.0, 0.0, 0.0, 0.0]}],
-        })
+        client.post(
+            "/vectors/upsert",
+            json={
+                "collection": "test",
+                "vectors": [{"id": "v1", "values": [1.0, 0.0, 0.0, 0.0]}],
+            },
+        )
         r = client.get("/vectors/test/v1")
         assert r.status_code == 200
         data = r.json()
@@ -142,10 +160,13 @@ class TestVectors:
 
     def test_delete_vector(self):
         self._create_collection()
-        client.post("/vectors/upsert", json={
-            "collection": "test",
-            "vectors": [{"id": "v1", "values": [1.0, 0.0, 0.0, 0.0]}],
-        })
+        client.post(
+            "/vectors/upsert",
+            json={
+                "collection": "test",
+                "vectors": [{"id": "v1", "values": [1.0, 0.0, 0.0, 0.0]}],
+            },
+        )
         r = client.delete("/vectors/test/v1")
         assert r.status_code == 200
         r2 = client.get("/vectors/test/v1")
@@ -156,30 +177,40 @@ class TestVectors:
 # Search
 # ------------------------------------------------------------------
 
+
 class TestSearch:
 
     def _setup_search_collection(self):
-        client.post("/collections", json={
-            "name": "search_test",
-            "dimension": 3,
-            "metric": "cosine",
-        })
-        client.post("/vectors/upsert", json={
-            "collection": "search_test",
-            "vectors": [
-                {"id": "v1", "values": [1.0, 0.0, 0.0], "metadata": {"label": "x"}},
-                {"id": "v2", "values": [0.0, 1.0, 0.0], "metadata": {"label": "y"}},
-                {"id": "v3", "values": [0.0, 0.0, 1.0], "metadata": {"label": "z"}},
-            ],
-        })
+        client.post(
+            "/collections",
+            json={
+                "name": "search_test",
+                "dimension": 3,
+                "metric": "cosine",
+            },
+        )
+        client.post(
+            "/vectors/upsert",
+            json={
+                "collection": "search_test",
+                "vectors": [
+                    {"id": "v1", "values": [1.0, 0.0, 0.0], "metadata": {"label": "x"}},
+                    {"id": "v2", "values": [0.0, 1.0, 0.0], "metadata": {"label": "y"}},
+                    {"id": "v3", "values": [0.0, 0.0, 1.0], "metadata": {"label": "z"}},
+                ],
+            },
+        )
 
     def test_search_basic(self):
         self._setup_search_collection()
-        r = client.post("/vectors/search", json={
-            "collection": "search_test",
-            "vector": [0.9, 0.1, 0.0],
-            "k": 1,
-        })
+        r = client.post(
+            "/vectors/search",
+            json={
+                "collection": "search_test",
+                "vector": [0.9, 0.1, 0.0],
+                "k": 1,
+            },
+        )
         assert r.status_code == 200
         data = r.json()
         assert len(data["matches"]) == 1
@@ -187,51 +218,66 @@ class TestSearch:
 
     def test_search_with_metadata(self):
         self._setup_search_collection()
-        r = client.post("/vectors/search", json={
-            "collection": "search_test",
-            "vector": [0.0, 0.0, 1.0],
-            "k": 1,
-            "include_metadata": True,
-        })
+        r = client.post(
+            "/vectors/search",
+            json={
+                "collection": "search_test",
+                "vector": [0.0, 0.0, 1.0],
+                "k": 1,
+                "include_metadata": True,
+            },
+        )
         data = r.json()
         assert data["matches"][0]["metadata"]["label"] == "z"
 
     def test_search_with_values(self):
         self._setup_search_collection()
-        r = client.post("/vectors/search", json={
-            "collection": "search_test",
-            "vector": [1.0, 0.0, 0.0],
-            "k": 1,
-            "include_values": True,
-        })
+        r = client.post(
+            "/vectors/search",
+            json={
+                "collection": "search_test",
+                "vector": [1.0, 0.0, 0.0],
+                "k": 1,
+                "include_values": True,
+            },
+        )
         data = r.json()
         assert data["matches"][0]["values"] is not None
         assert len(data["matches"][0]["values"]) == 3
 
     def test_search_wrong_dimension(self):
         self._setup_search_collection()
-        r = client.post("/vectors/search", json={
-            "collection": "search_test",
-            "vector": [1.0, 0.0],
-            "k": 1,
-        })
+        r = client.post(
+            "/vectors/search",
+            json={
+                "collection": "search_test",
+                "vector": [1.0, 0.0],
+                "k": 1,
+            },
+        )
         assert r.status_code == 400
 
     def test_search_missing_collection(self):
-        r = client.post("/vectors/search", json={
-            "collection": "nope",
-            "vector": [1.0],
-            "k": 1,
-        })
+        r = client.post(
+            "/vectors/search",
+            json={
+                "collection": "nope",
+                "vector": [1.0],
+                "k": 1,
+            },
+        )
         assert r.status_code == 404
 
     def test_search_response_structure(self):
         self._setup_search_collection()
-        r = client.post("/vectors/search", json={
-            "collection": "search_test",
-            "vector": [1.0, 0.0, 0.0],
-            "k": 3,
-        })
+        r = client.post(
+            "/vectors/search",
+            json={
+                "collection": "search_test",
+                "vector": [1.0, 0.0, 0.0],
+                "k": 3,
+            },
+        )
         data = r.json()
         assert data["collection"] == "search_test"
         assert data["query_dimension"] == 3

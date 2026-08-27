@@ -8,7 +8,6 @@ from nexusdb.utils.distance import (
     dot_product_distance,
     euclidean_distance,
     get_distance_fn,
-    SUPPORTED_METRICS,
 )
 
 
@@ -35,11 +34,14 @@ class TestCosineDistance:
 
     def test_batch(self):
         a = np.array([1.0, 0.0], dtype=np.float32)
-        b = np.array([
-            [1.0, 0.0],
-            [0.0, 1.0],
-            [-1.0, 0.0],
-        ], dtype=np.float32)
+        b = np.array(
+            [
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [-1.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
         d = cosine_distance(a, b)
         assert d.shape == (3,)
         np.testing.assert_array_almost_equal(d, [0.0, 1.0, 2.0], decimal=5)
