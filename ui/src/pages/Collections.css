@@ -22,34 +22,18 @@
 
 .collection-card {
     background: var(--bg-card);
-    backdrop-filter: blur(12px);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-subtle-3);
     padding: 20px;
     transition: all var(--duration) var(--ease);
     position: relative;
     overflow: hidden;
 }
 
-.collection-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: var(--accent-gradient);
-    opacity: 0;
-    transition: opacity var(--duration) var(--ease);
-}
-
 .collection-card:hover {
     border-color: var(--border-hover);
     transform: translateY(-2px);
-}
-
-.collection-card:hover::before {
-    opacity: 1;
 }
 
 .collection-card-header {
@@ -76,7 +60,7 @@
 
 .delete-btn:hover {
     color: var(--error);
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(185, 28, 28, 0.08);
 }
 
 .delete-btn svg {
@@ -176,14 +160,13 @@
 .form-select:focus,
 .form-textarea:focus {
     border-color: var(--border-focus);
-    background: rgba(99, 102, 241, 0.05);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(23, 23, 23, 0.08);
 }
 
 .form-select {
     cursor: pointer;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%238888a0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%23666666' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 12px center;
     padding-right: 36px;
@@ -198,8 +181,8 @@
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -214,6 +197,7 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
     animation: slideUp var(--duration-slow) var(--ease);
 }
 
@@ -266,12 +250,12 @@
 
 .dim-preset-btn {
     padding: 5px 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-pill);
     font-size: 0.78rem;
     font-weight: 600;
     font-family: var(--font-mono);
     border: 1px solid var(--border-color);
-    background: var(--bg-glass);
+    background: var(--color-paper-white);
     color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -280,13 +264,13 @@
 .dim-preset-btn:hover {
     border-color: var(--border-hover);
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--color-canvas);
 }
 
 .dim-preset-btn.active {
-    background: rgba(99, 102, 241, 0.15);
-    border-color: var(--accent-primary);
-    color: #a5b4fc;
+    background: var(--color-ink);
+    border-color: var(--color-ink);
+    color: #fff;
 }
 
 .dim-hint {

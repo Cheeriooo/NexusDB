@@ -1,7 +1,7 @@
 .sidebar {
     width: var(--sidebar-width);
     height: 100vh;
-    background: var(--bg-secondary);
+    background: var(--color-paper-white);
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
@@ -45,11 +45,8 @@
 
 .logo-name {
     font-size: 1.2rem;
-    font-weight: 700;
-    background: var(--accent-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-weight: 600;
+    color: var(--color-ink);
     letter-spacing: -0.02em;
 }
 
@@ -94,7 +91,7 @@
 }
 
 .nav-item:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-canvas);
     color: var(--text-primary);
 }
 
@@ -103,7 +100,7 @@
 }
 
 .nav-item.active {
-    background: var(--accent-gradient);
+    background: var(--color-ink);
     color: #fff;
     font-weight: 600;
 }
@@ -147,7 +144,7 @@
 
     .sidebar.open {
         transform: translateX(0);
-        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+        box-shadow: var(--shadow-xl);
     }
 
     .sidebar-backdrop {

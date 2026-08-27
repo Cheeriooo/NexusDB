@@ -71,8 +71,8 @@ export default function Sidebar({ activeView, onNavigate, isOpen, onClose }) {
                                 <line x1="10" y1="20" x2="22" y2="20" stroke="url(#lg)" strokeWidth="1.5" opacity="0.6" />
                                 <defs>
                                     <linearGradient id="lg" x1="0" y1="0" x2="32" y2="32">
-                                        <stop offset="0%" stopColor="#6366f1" />
-                                        <stop offset="100%" stopColor="#a855f7" />
+                                        <stop offset="0%" stopColor="#171717" />
+                                        <stop offset="100%" stopColor="#171717" />
                                     </linearGradient>
                                 </defs>
                             </svg>

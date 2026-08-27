@@ -10,6 +10,7 @@
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-subtle-3);
     overflow: hidden;
     position: relative;
 }
@@ -35,7 +36,7 @@
     text-align: center;
     color: var(--text-tertiary);
     z-index: 10;
-    background: rgba(10, 10, 15, 0.7);
+    background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(4px);
 }
 
@@ -77,6 +78,7 @@
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-subtle-3);
     padding: 16px;
 }
 
@@ -159,29 +161,29 @@
     opacity: 0;
     transition: opacity 0.15s ease;
     pointer-events: none;
-    background: rgba(10, 10, 20, 0.92);
+    background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(99, 102, 241, 0.3);
+    border: 1px solid var(--border-color);
     border-radius: 10px;
     padding: 0;
     min-width: 200px;
     max-width: 280px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(99, 102, 241, 0.1);
+    box-shadow: var(--shadow-xl);
     overflow: hidden;
 }
 
 .tt-header {
     padding: 8px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    background: rgba(99, 102, 241, 0.08);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--color-canvas);
 }
 
 .tt-id {
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 0.75rem;
     font-weight: 600;
-    color: #a5b4fc;
+    color: var(--color-ink);
     word-break: break-all;
 }
 
@@ -200,14 +202,14 @@
 }
 
 .tt-key {
-    color: #8888a0;
+    color: var(--text-secondary);
     font-weight: 500;
     white-space: nowrap;
     flex-shrink: 0;
 }
 
 .tt-val {
-    color: #e2e8f0;
+    color: var(--text-primary);
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 0.7rem;
     text-align: right;
@@ -217,7 +219,7 @@
 
 .tt-more {
     font-size: 0.68rem;
-    color: #5a5a72;
+    color: var(--text-tertiary);
     padding-top: 4px;
     font-style: italic;
 }
@@ -225,7 +227,7 @@
 /* Empty state hint */
 .viz-empty-hint {
     font-size: 0.78rem;
-    color: #5a5a72;
+    color: var(--text-tertiary);
     margin-top: 8px;
 }
 
@@ -315,10 +317,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     padding: 3px 10px;
-    border-radius: 20px;
-    background: rgba(251, 191, 36, 0.15);
-    border: 1px solid rgba(251, 191, 36, 0.4);
-    color: #fbbf24;
+    border-radius: var(--radius-pill);
+    background: var(--color-canvas);
+    border: 1px solid var(--border-color);
+    color: var(--color-ink);
     font-size: 0.75rem;
     font-family: var(--font-mono);
 }

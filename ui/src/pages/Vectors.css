@@ -53,16 +53,16 @@
 }
 
 .mode-tab.active {
-    color: var(--accent-primary, #6366f1);
-    border-bottom-color: var(--accent-primary, #6366f1);
+    color: var(--color-ink);
+    border-bottom-color: var(--color-ink);
 }
 
 /* Embed info banner */
 .embed-info-banner {
     font-size: 0.8rem;
     color: var(--text-secondary);
-    background: rgba(99, 102, 241, 0.08);
-    border: 1px solid rgba(99, 102, 241, 0.25);
+    background: var(--color-canvas);
+    border: 1px solid var(--border-color);
     border-radius: var(--radius-md, 6px);
     padding: 10px 14px;
     margin-bottom: 14px;
@@ -72,9 +72,9 @@
 /* Embed warning banner */
 .embed-warn-banner {
     font-size: 0.8rem;
-    color: #fbbf24;
-    background: rgba(251, 191, 36, 0.08);
-    border: 1px solid rgba(251, 191, 36, 0.3);
+    color: var(--warning);
+    background: rgba(180, 83, 9, 0.06);
+    border: 1px solid rgba(180, 83, 9, 0.25);
     border-radius: var(--radius-md, 6px);
     padding: 10px 14px;
     margin-bottom: 14px;

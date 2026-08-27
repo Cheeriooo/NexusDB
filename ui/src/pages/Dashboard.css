@@ -8,9 +8,9 @@
 
 .metric-card {
     background: var(--bg-card);
-    backdrop-filter: blur(12px);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-subtle-3);
     padding: 20px;
     display: flex;
     align-items: center;
@@ -20,56 +20,9 @@
     overflow: hidden;
 }
 
-.metric-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    opacity: 0;
-    transition: opacity var(--duration) var(--ease);
-}
-
 .metric-card:hover {
     border-color: var(--border-hover);
     transform: translateY(-2px);
-}
-
-.metric-card:hover::before {
-    opacity: 1;
-}
-
-.glow-purple::before {
-    background: var(--accent-gradient);
-}
-
-.glow-blue::before {
-    background: linear-gradient(90deg, #3b82f6, #06b6d4);
-}
-
-.glow-green::before {
-    background: linear-gradient(90deg, #22c55e, #10b981);
-}
-
-.glow-orange::before {
-    background: linear-gradient(90deg, #f59e0b, #ef4444);
-}
-
-.glow-purple {
-    box-shadow: inset 0 0 40px var(--glow-purple);
-}
-
-.glow-blue {
-    box-shadow: inset 0 0 40px var(--glow-blue);
-}
-
-.glow-green {
-    box-shadow: inset 0 0 40px var(--glow-green);
-}
-
-.glow-orange {
-    box-shadow: inset 0 0 40px var(--glow-orange);
 }
 
 .metric-icon {
@@ -80,6 +33,9 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    background: var(--color-canvas);
+    border: 1px solid var(--border-color);
+    color: var(--color-ink);
 }
 
 .metric-icon svg {
@@ -87,29 +43,9 @@
     height: 24px;
 }
 
-.glow-purple .metric-icon {
-    background: rgba(99, 102, 241, 0.15);
-    color: #818cf8;
-}
-
-.glow-blue .metric-icon {
-    background: rgba(59, 130, 246, 0.15);
-    color: #60a5fa;
-}
-
-.glow-green .metric-icon {
-    background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
-}
-
-.glow-orange .metric-icon {
-    background: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
-}
-
 .metric-value {
     font-size: 1.8rem;
-    font-weight: 800;
+    font-weight: 600;
     letter-spacing: -0.03em;
     line-height: 1.1;
 }
@@ -134,9 +70,9 @@
 /* Cards */
 .card {
     background: var(--bg-card);
-    backdrop-filter: blur(12px);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-subtle-3);
     overflow: hidden;
     transition: border-color var(--duration) var(--ease);
 }
@@ -184,37 +120,35 @@
 }
 
 .btn-primary {
-    background: var(--accent-gradient);
+    background: var(--color-ink);
     color: #fff;
-    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25);
 }
 
 .btn-primary:hover {
-    background: var(--accent-gradient-hover);
-    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+    background: var(--color-onyx);
     transform: translateY(-1px);
 }
 
 .btn-ghost {
-    background: var(--bg-glass);
+    background: var(--color-paper-white);
     color: var(--text-secondary);
     border: 1px solid var(--border-color);
 }
 
 .btn-ghost:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--color-canvas);
     color: var(--text-primary);
     border-color: var(--border-hover);
 }
 
 .btn-danger {
-    background: rgba(239, 68, 68, 0.15);
+    background: rgba(185, 28, 28, 0.08);
     color: var(--error);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(185, 28, 28, 0.2);
 }
 
 .btn-danger:hover {
-    background: rgba(239, 68, 68, 0.25);
+    background: rgba(185, 28, 28, 0.14);
 }
 
 .btn-sm {
@@ -278,9 +212,10 @@
 .badge {
     font-size: 0.7rem;
     padding: 2px 8px;
-    border-radius: 6px;
-    background: rgba(99, 102, 241, 0.15);
-    color: #818cf8;
+    border-radius: var(--radius-pill);
+    background: var(--color-canvas);
+    border: 1px solid var(--border-color);
+    color: var(--color-ink);
     font-family: var(--font-mono);
     font-weight: 600;
 }
@@ -294,7 +229,7 @@
     padding: 14px 16px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    background: var(--bg-glass);
+    background: var(--color-paper-white);
     color: var(--text-primary);
     cursor: pointer;
     transition: all var(--duration) var(--ease);
@@ -308,15 +243,15 @@
 }
 
 .action-btn:hover {
-    background: rgba(99, 102, 241, 0.08);
-    border-color: rgba(99, 102, 241, 0.3);
+    background: var(--color-canvas);
+    border-color: var(--border-hover);
     transform: translateX(4px);
 }
 
 .action-btn svg {
     width: 22px;
     height: 22px;
-    color: var(--accent-primary);
+    color: var(--color-ink);
     flex-shrink: 0;
 }
 
