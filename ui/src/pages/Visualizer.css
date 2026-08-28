@@ -30,7 +30,7 @@
     text-align: center;
     color: var(--text-tertiary);
     z-index: 10;
-    background: rgba(8, 7, 10, 0.9);
+    background: rgba(3, 4, 5, 0.9);
     backdrop-filter: blur(4px);
     pointer-events: none;
 }
@@ -183,7 +183,7 @@
     position: absolute;
     z-index: 100;
     pointer-events: none;
-    background: rgba(19, 17, 16, 0.98);
+    background: rgba(16, 18, 21, 0.98);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border-hover);
@@ -258,7 +258,7 @@
     font-size: 11px;
     font-weight: 600;
     color: var(--accent);
-    background: rgba(19, 17, 16, 0.92);
+    background: rgba(16, 18, 21, 0.92);
     border: 1px solid var(--accent-line);
     border-radius: var(--radius-sm);
     padding: 4px 10px;

@@ -142,7 +142,7 @@
 .dim-preset-btn.active {
     background: var(--accent);
     border-color: var(--accent);
-    color: #1a0800;
+    color: var(--text-inverse);
 }
 
 .dim-hint {

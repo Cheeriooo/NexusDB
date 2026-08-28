@@ -29,12 +29,12 @@
 }
 
 .toast-success {
-    border: 1px solid rgba(127, 176, 105, 0.3);
+    border: 1px solid rgba(34, 211, 164, 0.3);
     color: var(--success);
 }
 
 .toast-error {
-    border: 1px solid rgba(226, 84, 74, 0.3);
+    border: 1px solid rgba(255, 92, 92, 0.3);
     color: var(--error);
 }
 

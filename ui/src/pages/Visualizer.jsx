@@ -22,7 +22,7 @@ function getModelForDimension(dim) {
 const SCALE = 32;
 const NEAR = new THREE.Color('#6f685d');
 const MID = new THREE.Color('#f3eee3');
-const FAR = new THREE.Color('#ff6a3d');
+const FAR = new THREE.Color('#22d3a4');
 
 /* ---- Build render-ready point data from raw PCA vectors ---- */
 function buildPointData(vecs) {
@@ -132,7 +132,7 @@ function HoverMarker({ position }) {
             <Billboard>
                 <mesh ref={ref}>
                     <ringGeometry args={[1.6, 1.85, 32]} />
-                    <meshBasicMaterial color="#ff6a3d" transparent opacity={0.85} side={THREE.DoubleSide} />
+                    <meshBasicMaterial color="#22d3a4" transparent opacity={0.85} side={THREE.DoubleSide} />
                 </mesh>
             </Billboard>
         </group>
@@ -150,7 +150,7 @@ function QueryMarker({ position, text }) {
         <group position={position}>
             <mesh ref={ref}>
                 <sphereGeometry args={[1.3, 24, 24]} />
-                <meshStandardMaterial color="#ff6a3d" emissive="#ff6a3d" emissiveIntensity={1.1} toneMapped={false} />
+                <meshStandardMaterial color="#22d3a4" emissive="#22d3a4" emissiveIntensity={1.1} toneMapped={false} />
             </mesh>
             <Html distanceFactor={26} position={[0, 3.2, 0]} center occlude={false}>
                 <div className="query-flag">▸ {text.length > 26 ? text.slice(0, 24) + '…' : text}</div>
@@ -199,7 +199,7 @@ function Scene({ data, query, onHover, autoRotate }) {
             <color attach="background" args={['#08070a']} />
             <fogExp2 attach="fog" args={['#08070a', 0.0055]} />
             <ambientLight intensity={0.65} />
-            <pointLight position={[60, 55, 40]} intensity={60} color="#ff6a3d" />
+            <pointLight position={[60, 55, 40]} intensity={60} color="#22d3a4" />
             <pointLight position={[-50, 30, -50]} intensity={40} color="#f3eee3" />
 
             <Grid
@@ -441,8 +441,8 @@ export default function Visualizer({ addToast }) {
                     <div className="viz-info-card">
                         <h4>Legend</h4>
                         <div className="legend-item"><span className="legend-dot" style={{ background: 'linear-gradient(135deg, #6f685d, #f3eee3)' }} /> Near centroid</div>
-                        <div className="legend-item"><span className="legend-dot" style={{ background: 'linear-gradient(135deg, #f3eee3, #ff6a3d)' }} /> Far from centroid</div>
-                        <div className="legend-item"><span className="legend-dot" style={{ background: '#ff6a3d', boxShadow: '0 0 6px #ff6a3d' }} /> Query point</div>
+                        <div className="legend-item"><span className="legend-dot" style={{ background: 'linear-gradient(135deg, #f3eee3, #22d3a4)' }} /> Far from centroid</div>
+                        <div className="legend-item"><span className="legend-dot" style={{ background: '#22d3a4', boxShadow: '0 0 6px #22d3a4' }} /> Query point</div>
                     </div>
 
                     <div className="viz-info-card query-panel">

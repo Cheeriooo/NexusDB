@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
 import './Sidebar.css';
@@ -70,7 +71,7 @@ export default function Sidebar({ activeView, onNavigate, isOpen, onClose }) {
             </AnimatePresence>
             <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
                 <div className="sidebar-header">
-                    <div className="logo">
+                    <Link to="/" className="logo">
                         <div className="logo-mark">
                             <svg viewBox="0 0 32 32" fill="none">
                                 <circle cx="16" cy="10" r="2.2" fill="var(--accent)" />
@@ -85,7 +86,7 @@ export default function Sidebar({ activeView, onNavigate, isOpen, onClose }) {
                             <span className="logo-name">NexusDB</span>
                             <span className="logo-version">rev.0.1.0</span>
                         </div>
-                    </div>
+                    </Link>
                 </div>
 
                 <nav className="sidebar-nav">
