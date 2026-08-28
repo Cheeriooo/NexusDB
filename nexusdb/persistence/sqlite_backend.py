@@ -93,12 +93,16 @@ class SQLiteBackend:
         metric: str,
         created_at: str,
         updated_at: str,
+        index_type: str = "flat",
+        index_params: dict | None = None,
     ) -> None:
         """Insert or update collection metadata rows without touching vectors."""
         metadata = {
             "name": collection_name,
             "dimension": dimension,
             "metric": metric,
+            "index_type": index_type,
+            "index_params": json.dumps(index_params or {}),
             "created_at": created_at,
             "updated_at": updated_at,
         }
@@ -120,6 +124,8 @@ class SQLiteBackend:
         vectors: list[Vector],
         created_at: str,
         updated_at: str,
+        index_type: str = "flat",
+        index_params: dict | None = None,
     ) -> None:
         """Save collection to SQLite.
 
@@ -130,6 +136,8 @@ class SQLiteBackend:
             vectors: List of Vector objects to save.
             created_at: ISO format creation timestamp.
             updated_at: ISO format update timestamp.
+            index_type: Which index implementation the collection uses.
+            index_params: Extra index constructor kwargs (e.g. HNSW's m/ef_construction).
         """
         with sqlite3.connect(self.db_path) as conn:
             # Delete existing data
@@ -141,6 +149,8 @@ class SQLiteBackend:
                 "name": collection_name,
                 "dimension": dimension,
                 "metric": metric,
+                "index_type": index_type,
+                "index_params": json.dumps(index_params or {}),
                 "created_at": created_at,
                 "updated_at": updated_at,
             }
@@ -192,6 +202,10 @@ class SQLiteBackend:
                 "name": metadata.get("name"),
                 "dimension": int(metadata.get("dimension", 0)),
                 "metric": metadata.get("metric", "cosine"),
+                "index_type": metadata.get("index_type", "flat"),
+                "index_params": (
+                    json.loads(metadata["index_params"]) if metadata.get("index_params") else {}
+                ),
                 "created_at": metadata.get("created_at"),
                 "updated_at": metadata.get("updated_at"),
             }

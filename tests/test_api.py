@@ -61,6 +61,58 @@ class TestCollections:
         r = client.post("/collections", json={"name": "test", "dimension": 4})
         assert r.status_code == 409
 
+    def test_create_hnsw_collection(self):
+        r = client.post(
+            "/collections",
+            json={
+                "name": "ann",
+                "dimension": 8,
+                "metric": "cosine",
+                "index_type": "hnsw",
+                "m": 8,
+                "ef_construction": 40,
+                "ef_search": 30,
+            },
+        )
+        assert r.status_code == 201
+        data = r.json()
+        assert data["index_type"] == "hnsw"
+
+    def test_create_unknown_index_type_rejected(self):
+        r = client.post(
+            "/collections",
+            json={"name": "bad", "dimension": 4, "index_type": "ivf"},
+        )
+        assert r.status_code == 422  # pydantic pattern validation on CollectionCreate
+
+    def test_hnsw_collection_search_roundtrip(self):
+        client.post(
+            "/collections",
+            json={
+                "name": "ann",
+                "dimension": 4,
+                "index_type": "hnsw",
+                "m": 4,
+                "ef_construction": 20,
+            },
+        )
+        client.post(
+            "/vectors/upsert",
+            json={
+                "collection": "ann",
+                "vectors": [
+                    {"id": "a", "values": [1.0, 0.0, 0.0, 0.0]},
+                    {"id": "b", "values": [0.0, 1.0, 0.0, 0.0]},
+                ],
+            },
+        )
+        r = client.post(
+            "/vectors/search",
+            json={"collection": "ann", "vector": [0.9, 0.1, 0.0, 0.0], "k": 1},
+        )
+        assert r.status_code == 200
+        assert r.json()["matches"][0]["id"] == "a"
+
     def test_list_collections(self):
         client.post("/collections", json={"name": "a", "dimension": 2})
         client.post("/collections", json={"name": "b", "dimension": 3})

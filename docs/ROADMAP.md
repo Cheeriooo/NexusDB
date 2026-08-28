@@ -78,14 +78,45 @@ not because it's blocked.
 **Goal:** this is the part that turns "CRUD app with cosine similarity" into
 "vector database." It's also the most fun to build and the best interview story.
 
-- [ ] Design an `Index` protocol/ABC in `nexusdb/core/index/` that `FlatIndex` already implicitly satisfies — formalize it so a second implementation can be swapped in per-collection.
-- [ ] Implement **HNSW** (Hierarchical Navigable Small World) from scratch: layered graph construction, greedy search with a candidate heap, configurable `M` (max connections) and `ef_construction`/`ef_search`.
-  - Start with insert + search; skip delete-support in the graph initially (mark-as-deleted + periodic rebuild is a fine first pass, and is itself worth documenting as a tradeoff).
-- [ ] Let `POST /collections` accept an `index_type: "flat" | "hnsw"` (default `flat` for correctness-by-default) and construction params (`m`, `ef_construction`).
-- [ ] **Benchmark suite** (`benchmarks/` at repo root, or `tests/benchmarks/`): measure recall@10 and p50/p95 query latency for `FlatIndex` vs your `HNSWIndex` across a few dataset sizes (10k / 100k / 1M synthetic or real embeddings). Publish the numbers and a plot in the README or a `docs/BENCHMARKS.md`.
-- [ ] Document the tradeoff explicitly: exact recall with `FlatIndex`, tunable recall/speed with `HNSWIndex`.
+- [x] Design an `Index` protocol/ABC in `nexusdb/core/index/` that `FlatIndex` already implicitly satisfies — formalize it so a second implementation can be swapped in per-collection.
+- [x] Implement **HNSW** (Hierarchical Navigable Small World) from scratch: layered graph construction, greedy search with a candidate heap, configurable `M` (max connections) and `ef_construction`/`ef_search`.
+  - Delete support is mark-as-deleted (soft delete/tombstone) + rebuild past a configurable `rebuild_threshold` fraction of tombstones — documented as a tradeoff in `nexusdb/core/index/hnsw_index.py`'s module docstring, not hidden.
+- [x] Let `POST /collections` accept an `index_type: "flat" | "hnsw"` (default `flat` for correctness-by-default) and construction params (`m`, `ef_construction`, `ef_search`). Persisted through SQLite so reloading a collection doesn't silently downgrade it back to `flat`.
+- [x] **Benchmark suite** (`benchmarks/bench_ann.py`): measures recall@10 and p50/p95 query latency for `FlatIndex` vs `HNSWIndex` across 1k/10k/100k synthetic vectors (see note on dataset size below), plus a wall-clock-independent "distance computations per query" metric. Numbers published in `docs/BENCHMARKS.md` with a plot at `docs/benchmark_plot.png`.
+- [x] Document the tradeoff explicitly: exact recall with `FlatIndex` vs. tunable recall/speed with `HNSWIndex` — see "Reading these numbers" in `docs/BENCHMARKS.md`.
 
 **Done when:** you can point at a chart showing HNSW beating brute force on latency at >95% recall, on your own numbers, on your own machine.
+
+**Status (2026-08-28): implementation done and verified; benchmark run for real,
+"done when" bar only partially cleared — reported honestly rather than cherry-picked.**
+- All code paths verified with tests, not just written: 36 new tests (`tests/test_hnsw_index.py`
+  plus HNSW coverage added to `test_collection.py`/`test_api.py`/`test_sqlite_persistence.py`),
+  130/130 passing, `ruff`/`black` clean.
+- An independent adversarial review of `hnsw_index.py` (fresh context, no knowledge of my
+  design choices) caught two real bugs before this was called done, both fixed and covered
+  by regression tests: (1) repeatedly upserting the *same* id without ever calling `remove()`
+  tombstoned a fresh node each time but never checked `rebuild_threshold`, so `_graph`/`_levels`
+  grew unboundedly while `size` stayed constant — a real memory leak under a realistic workload
+  ("re-embed and update this document"); (2) the search-distance counter was reset outside the
+  lock it claims to respect, a live instance of the exact "mutate shared state outside the lock"
+  bug class Phase 1 fixed in `FlatIndex`.
+- **Benchmark, run at real scale (1k/10k/100k, dim=128, cosine)**: recall@10 was 1.000 / 0.857 /
+  0.387 respectively at a fixed `ef_search=150`; wall-clock speedup over `FlatIndex` was
+  0.03x / 0.11x / 1.01x — HNSW only reaches latency *parity* at 100k, and only at 39% recall.
+  A follow-up `ef_search` sweep at n=100,000 (same built graph, `benchmarks/sweep_ef_search.py`)
+  found that clearing 95% recall needs `ef_search≈2000`, at which point HNSW is ~12x *slower*
+  than brute force — recall and wall-clock speed trade off directly at this scale, they are not
+  simultaneously achievable with this implementation. Full numbers, the sweep table, and two
+  concrete reasons why (isotropic random data lacks the manifold structure real embeddings have;
+  pure-Python per-hop overhead vs. NumPy's single vectorized brute-force call) are in
+  `docs/BENCHMARKS.md`. The algorithmic complexity win is real and demonstrated independently
+  of wall-clock: at n=100,000, HNSW performs ~4,072 distance computations per query vs.
+  FlatIndex's 100,000 — a ~24.5x reduction — it just isn't realized as a *latency* win without
+  a compiled inner loop, which is the concrete, measured argument for why production vector
+  databases (hnswlib, FAISS, Qdrant) don't write this hot path in pure Python.
+- Also scaled dataset sizes down from the roadmap's 10k/100k/1M to 1k/10k/100k — a pure-Python
+  HNSW build at 1M vectors would take hours, not a reasonable benchmark iteration loop; the
+  100k build alone took ~21 minutes. Documented as a deliberate choice, not an oversight.
 
 **Stretch (only after the above is solid):** IVF+PQ (product quantization) as a
 third index type for memory-constrained scenarios — a good "I understand the

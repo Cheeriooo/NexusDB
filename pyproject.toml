@@ -28,6 +28,9 @@ dev = [
     "ruff>=0.6.0",
     "black>=24.0.0",
 ]
+benchmark = [
+    "matplotlib>=3.8.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

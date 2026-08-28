@@ -9,8 +9,16 @@ from typing import Any
 
 import numpy as np
 
-from nexusdb.core.index.flat_index import FlatIndex, SearchResult
+from nexusdb.core.index.base import Index, SearchResult
+from nexusdb.core.index.flat_index import FlatIndex
+from nexusdb.core.index.hnsw_index import HNSWIndex
 from nexusdb.core.vector import Vector
+
+# Registry of index implementations selectable via `index_type`.
+_INDEX_REGISTRY: dict[str, type[Index]] = {
+    "flat": FlatIndex,
+    "hnsw": HNSWIndex,
+}
 
 
 class Collection:
@@ -23,6 +31,10 @@ class Collection:
         name: Unique name for this collection.
         dimension: Dimensionality of vectors.
         metric: Distance metric ('cosine', 'euclidean', 'dot').
+        index_type: Which index implementation to use — 'flat' (exact,
+            brute-force) or 'hnsw' (approximate, faster at scale).
+        index_params: Extra keyword arguments forwarded to the index
+            constructor (e.g. `m`, `ef_construction` for 'hnsw').
     """
 
     def __init__(
@@ -30,19 +42,29 @@ class Collection:
         name: str,
         dimension: int,
         metric: str = "cosine",
+        index_type: str = "flat",
+        index_params: dict | None = None,
     ) -> None:
         if not name or not name.strip():
             raise ValueError("Collection name must not be empty")
         if dimension <= 0:
             raise ValueError(f"dimension must be positive, got {dimension}")
 
+        index_cls = _INDEX_REGISTRY.get(index_type)
+        if index_cls is None:
+            raise ValueError(
+                f"Unknown index_type '{index_type}'. Supported: {list(_INDEX_REGISTRY)}"
+            )
+
         self.name = name.strip()
         self.dimension = dimension
         self.metric = metric
+        self.index_type = index_type
+        self.index_params = dict(index_params or {})
         self.created_at = datetime.now(UTC)
         self.updated_at = self.created_at
 
-        self._index = FlatIndex(dimension=dimension, metric=metric)
+        self._index = index_cls(dimension=dimension, metric=metric, **self.index_params)
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -86,19 +108,22 @@ class Collection:
         self,
         query: list[float] | np.ndarray,
         k: int = 10,
+        ef_search: int | None = None,
     ) -> list[SearchResult]:
         """Search for nearest neighbors.
 
         Args:
             query: Query vector (list or numpy array).
             k: Number of neighbors to return.
+            ef_search: For an 'hnsw' collection, overrides the index's default
+                speed/recall tradeoff for this query. Ignored for 'flat'.
 
         Returns:
             List of SearchResult ordered by distance (ascending).
         """
         if isinstance(query, (list, tuple)):
             query = np.array(query, dtype=np.float32)
-        return self._index.search(query, k=k)
+        return self._index.search(query, k=k, ef_search=ef_search)
 
     # ------------------------------------------------------------------
     # Info
@@ -115,6 +140,7 @@ class Collection:
             "name": self.name,
             "dimension": self.dimension,
             "metric": self.metric,
+            "index_type": self.index_type,
             "count": self.count,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
@@ -146,6 +172,8 @@ class Collection:
             vectors=vectors_to_save,
             created_at=self.created_at.isoformat(),
             updated_at=self.updated_at.isoformat(),
+            index_type=self.index_type,
+            index_params=self.index_params,
         )
 
     @classmethod
@@ -175,6 +203,8 @@ class Collection:
             name=collection_info["name"],
             dimension=collection_info["dimension"],
             metric=collection_info["metric"],
+            index_type=collection_info.get("index_type", "flat"),
+            index_params=collection_info.get("index_params") or {},
         )
 
         # Restore timestamps

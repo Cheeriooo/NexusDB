@@ -14,6 +14,7 @@ class TestCollectionCreation:
         assert col.name == "test"
         assert col.dimension == 128
         assert col.metric == "cosine"
+        assert col.index_type == "flat"
         assert col.count == 0
 
     def test_empty_name_raises(self):
@@ -24,12 +25,27 @@ class TestCollectionCreation:
         with pytest.raises(ValueError, match="dimension"):
             Collection(name="test", dimension=-1)
 
+    def test_unknown_index_type_raises(self):
+        with pytest.raises(ValueError, match="index_type"):
+            Collection(name="test", dimension=8, index_type="ivf")
+
+    def test_create_hnsw_index_type(self):
+        col = Collection(
+            name="ann", dimension=8, index_type="hnsw", index_params={"m": 8, "ef_construction": 40}
+        )
+        assert col.index_type == "hnsw"
+        from nexusdb.core.index.hnsw_index import HNSWIndex
+
+        assert isinstance(col._index, HNSWIndex)
+        assert col._index.m == 8
+
     def test_info(self):
         col = Collection(name="docs", dimension=768, metric="euclidean")
         info = col.info()
         assert info["name"] == "docs"
         assert info["dimension"] == 768
         assert info["metric"] == "euclidean"
+        assert info["index_type"] == "flat"
         assert info["count"] == 0
         assert "created_at" in info
         assert "updated_at" in info

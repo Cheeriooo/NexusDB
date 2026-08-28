@@ -3,24 +3,17 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
 
 import numpy as np
 
+from nexusdb.core.index.base import Index, SearchResult
 from nexusdb.core.vector import Vector
 from nexusdb.utils.distance import get_distance_fn
 
-
-@dataclass
-class SearchResult:
-    """A single search result."""
-
-    id: str
-    distance: float
-    vector: Vector | None = None
+__all__ = ["FlatIndex", "SearchResult"]
 
 
-class FlatIndex:
+class FlatIndex(Index):
     """In-memory brute-force vector index.
 
     Stores all vectors in a dense numpy matrix and computes exact
@@ -103,6 +96,7 @@ class FlatIndex:
         query: np.ndarray,
         k: int = 10,
         ids_filter: set | None = None,
+        ef_search: int | None = None,
     ) -> list[SearchResult]:
         """Find the k nearest neighbors to the query vector.
 
@@ -110,10 +104,13 @@ class FlatIndex:
             query: Query vector of shape (D,).
             k: Number of results to return.
             ids_filter: If provided, only search within these vector IDs.
+            ef_search: Unused — accepted for interface parity with `HNSWIndex`,
+                since `FlatIndex` is always exact.
 
         Returns:
             List of SearchResult sorted by distance (ascending).
         """
+        del ef_search
         if query.ndim != 1 or len(query) != self.dimension:
             raise ValueError(
                 f"Query must be 1D with dimension {self.dimension}, " f"got shape {query.shape}"

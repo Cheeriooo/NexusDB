@@ -62,6 +62,39 @@ def test_save_and_load():
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def test_save_and_load_preserves_hnsw_index_type():
+    """A collection's index_type/index_params must survive a save/load round-trip,
+    or reloading an 'hnsw' collection would silently downgrade it to 'flat'."""
+    tmpdir = tempfile.mkdtemp()
+    try:
+        db_path = Path(tmpdir) / "hnsw_col.db"
+
+        col = Collection(
+            name="ann",
+            dimension=3,
+            metric="cosine",
+            index_type="hnsw",
+            index_params={"m": 8, "ef_construction": 40},
+        )
+        col.add([Vector(embedding=[0.1, 0.2, 0.3], id="vec1")])
+        col.save(db_path)
+
+        loaded = Collection.load(db_path)
+        assert loaded.index_type == "hnsw"
+        assert loaded.index_params["m"] == 8
+        assert loaded.index_params["ef_construction"] == 40
+        assert loaded.count == 1
+
+        from nexusdb.core.index.hnsw_index import HNSWIndex
+
+        assert isinstance(loaded._index, HNSWIndex)
+        assert loaded._index.m == 8
+    finally:
+        import shutil
+
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 def test_incremental_upsert_and_delete_do_not_rewrite_whole_table():
     """upsert_vectors/delete_vectors touch only the given rows, not the table."""
     tmpdir = tempfile.mkdtemp()

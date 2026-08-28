@@ -105,6 +105,8 @@ def _auto_persist_upsert(collection_name: str, vectors: list[Vector]) -> None:
             metric=col.metric,
             created_at=col.created_at.isoformat(),
             updated_at=col.updated_at.isoformat(),
+            index_type=col.index_type,
+            index_params=col.index_params,
         )
         backend.upsert_vectors(vectors)
     except Exception as e:
@@ -125,6 +127,8 @@ def _auto_persist_delete(collection_name: str, vector_id: str) -> None:
             metric=col.metric,
             created_at=col.created_at.isoformat(),
             updated_at=col.updated_at.isoformat(),
+            index_type=col.index_type,
+            index_params=col.index_params,
         )
     except Exception as e:
         print(f"[warn] Failed to auto-persist delete for {collection_name}: {e}")
@@ -139,12 +143,18 @@ class CollectionCreate(BaseModel):
     name: str
     dimension: int
     metric: str = "cosine"
+    index_type: str = Field(default="flat", pattern="^(flat|hnsw)$")
+    # HNSW-only construction params; ignored for index_type='flat'.
+    m: int = Field(default=16, ge=2)
+    ef_construction: int = Field(default=200, ge=1)
+    ef_search: int = Field(default=50, ge=1)
 
 
 class CollectionInfo(BaseModel):
     name: str
     dimension: int
     metric: str
+    index_type: str
     count: int
     created_at: str
     updated_at: str
@@ -172,6 +182,7 @@ class SearchRequest(BaseModel):
     collection: str
     include_metadata: bool = True
     include_values: bool = False
+    ef_search: int | None = Field(default=None, ge=1)
 
 
 class SearchMatch(BaseModel):
@@ -288,8 +299,22 @@ def create_collection(req: CollectionCreate):
     if req.name in _collections:
         raise HTTPException(status_code=409, detail=f"Collection '{req.name}' already exists")
 
+    index_params: dict[str, Any] = {}
+    if req.index_type == "hnsw":
+        index_params = {
+            "m": req.m,
+            "ef_construction": req.ef_construction,
+            "ef_search": req.ef_search,
+        }
+
     try:
-        col = Collection(name=req.name, dimension=req.dimension, metric=req.metric)
+        col = Collection(
+            name=req.name,
+            dimension=req.dimension,
+            metric=req.metric,
+            index_type=req.index_type,
+            index_params=index_params,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -305,6 +330,8 @@ def create_collection(req: CollectionCreate):
                 metric=col.metric,
                 created_at=col.created_at.isoformat(),
                 updated_at=col.updated_at.isoformat(),
+                index_type=col.index_type,
+                index_params=col.index_params,
             )
         except Exception as e:
             print(f"[warn] Failed to auto-save collection {req.name}: {e}")
@@ -412,7 +439,7 @@ def search_vectors(req: SearchRequest):
             f"collection dimension {col.dimension}",
         )
 
-    results = col.search(req.vector, k=req.k)
+    results = col.search(req.vector, k=req.k, ef_search=req.ef_search)
 
     matches: list[SearchMatch] = []
     for r in results:
