@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api';
 import './Search.css';
 
@@ -133,34 +134,44 @@ export default function Search({ addToast }) {
                                 <p>No matches found</p>
                             </div>
                         ) : (
-                            results.matches.map((m, i) => (
-                                <div key={m.id} className="search-result-item">
-                                    <div className="result-header">
-                                        <span className="result-rank">#{i + 1}</span>
-                                        <span className="result-id">{m.id}</span>
-                                        <span className="result-distance">dist: {m.distance.toFixed(6)}</span>
-                                    </div>
-                                    <div className="distance-bar">
-                                        <div
-                                            className="distance-bar-fill"
-                                            style={{ width: `${Math.max(5, (1 - m.distance / maxDist) * 100)}%` }}
-                                        />
-                                    </div>
-                                    {m.metadata && (
-                                        <div className="result-metadata">
-                                            {Object.entries(m.metadata).map(([k, v]) => (
-                                                <span key={k} className="meta-tag">{k}: {String(v)}</span>
-                                            ))}
+                            <AnimatePresence initial={false}>
+                                {results.matches.map((m, i) => (
+                                    <motion.div
+                                        key={m.id}
+                                        className="search-result-item"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.3, delay: i * 0.03, ease: [0.16, 1, 0.3, 1] }}
+                                    >
+                                        <div className="result-header">
+                                            <span className="result-rank">#{i + 1}</span>
+                                            <span className="result-id">{m.id}</span>
+                                            <span className="result-distance">dist: {m.distance.toFixed(6)}</span>
                                         </div>
-                                    )}
-                                    {m.values && (
-                                        <div className="result-values">
-                                            [{m.values.slice(0, 8).map((v) => v.toFixed(4)).join(', ')}
-                                            {m.values.length > 8 ? `, … (${m.values.length}D)` : ']'}
+                                        <div className="distance-bar">
+                                            <motion.div
+                                                className="distance-bar-fill"
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${Math.max(5, (1 - m.distance / maxDist) * 100)}%` }}
+                                                transition={{ duration: 0.5, delay: i * 0.03 + 0.1, ease: [0.16, 1, 0.3, 1] }}
+                                            />
                                         </div>
-                                    )}
-                                </div>
-                            ))
+                                        {m.metadata && (
+                                            <div className="result-metadata">
+                                                {Object.entries(m.metadata).map(([k, v]) => (
+                                                    <span key={k} className="meta-tag">{k}: {String(v)}</span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {m.values && (
+                                            <div className="result-values">
+                                                [{m.values.slice(0, 8).map((v) => v.toFixed(4)).join(', ')}
+                                                {m.values.length > 8 ? `, … (${m.values.length}D)` : ']'}
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
                         )}
                     </div>
                 </div>

@@ -19,7 +19,7 @@
     font-family: var(--font-mono);
     font-size: 0.8rem;
     color: var(--text-secondary);
-    background: var(--bg-input);
+    background: var(--bg-inset);
     padding: 14px;
     border-radius: var(--radius-sm);
     overflow-x: auto;
@@ -53,17 +53,17 @@
 }
 
 .mode-tab.active {
-    color: var(--color-ink);
-    border-bottom-color: var(--color-ink);
+    color: var(--accent);
+    border-bottom-color: var(--accent);
 }
 
 /* Embed info banner */
 .embed-info-banner {
     font-size: 0.8rem;
     color: var(--text-secondary);
-    background: var(--color-canvas);
+    background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-md);
     padding: 10px 14px;
     margin-bottom: 14px;
     line-height: 1.6;
@@ -73,9 +73,9 @@
 .embed-warn-banner {
     font-size: 0.8rem;
     color: var(--warning);
-    background: rgba(180, 83, 9, 0.06);
-    border: 1px solid rgba(180, 83, 9, 0.25);
-    border-radius: var(--radius-md, 6px);
+    background: var(--warning-dim);
+    border: 1px solid rgba(219, 162, 74, 0.3);
+    border-radius: var(--radius-md);
     padding: 10px 14px;
     margin-bottom: 14px;
     line-height: 1.6;
@@ -86,4 +86,6 @@
     font-size: 0.75rem;
     color: var(--text-tertiary);
     font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
 }

@@ -14,7 +14,6 @@
 .view-container {
   flex: 1;
   padding: 28px;
-  animation: fadeIn var(--duration-slow) var(--ease);
 }
 
 @media (max-width: 768px) {

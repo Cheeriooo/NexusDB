@@ -33,13 +33,13 @@
 }
 
 .checkbox-label input[type="checkbox"] {
-    accent-color: var(--accent-primary);
+    accent-color: var(--accent);
     width: 16px;
     height: 16px;
 }
 
 .result-meta-info {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     color: var(--text-tertiary);
     font-family: var(--font-mono);
 }
@@ -54,7 +54,7 @@
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     margin-bottom: 10px;
-    background: var(--color-paper-white);
+    background: var(--bg-inset);
     transition: all var(--duration) var(--ease);
 }
 
@@ -72,27 +72,27 @@
 
 .result-rank {
     font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--text-tertiary);
-    background: var(--color-canvas);
+    background: var(--bg-tertiary);
     padding: 2px 6px;
     border-radius: 4px;
 }
 
 .result-id {
     font-family: var(--font-mono);
-    font-size: 0.85rem;
+    font-size: 0.83rem;
     font-weight: 600;
-    color: var(--color-ink);
+    color: var(--text-primary);
     flex: 1;
 }
 
 .result-distance {
     font-family: var(--font-mono);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     color: var(--text-tertiary);
     padding: 2px 8px;
-    background: var(--color-canvas);
+    background: var(--bg-tertiary);
     border-radius: 4px;
 }
 
@@ -107,8 +107,8 @@
 .distance-bar-fill {
     height: 100%;
     border-radius: 2px;
-    background: var(--color-ink);
-    transition: width var(--duration-slow) var(--ease);
+    background: var(--accent);
+    transition: width var(--duration-slow) var(--ease-out-expo);
 }
 
 .result-metadata {
@@ -119,17 +119,17 @@
 }
 
 .meta-tag {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     padding: 2px 8px;
     border-radius: var(--radius-pill);
-    background: var(--color-canvas);
+    background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
-    color: var(--color-ink);
+    color: var(--text-secondary);
     font-family: var(--font-mono);
 }
 
 .result-values {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     margin-top: 6px;

@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { api } from '../api';
 import './Dashboard.css';
+
+const container = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.06 } },
+};
+
+const item = {
+    hidden: { opacity: 0, y: 14 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } },
+};
 
 export default function Dashboard({ navigate }) {
     const [health, setHealth] = useState(null);
@@ -14,38 +25,36 @@ export default function Dashboard({ navigate }) {
     const totalVectors = collections.reduce((sum, c) => sum + c.count, 0);
 
     return (
-        <div className="dashboard">
+        <motion.div className="dashboard" variants={container} initial="hidden" animate="show">
             {/* Metrics */}
             <div className="metrics-grid">
                 <MetricCard
                     icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>}
                     value={collections.length}
                     label="Collections"
-                    glow="purple"
                 />
                 <MetricCard
                     icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="3" /></svg>}
                     value={totalVectors.toLocaleString()}
                     label="Total Vectors"
-                    glow="blue"
+                    accent
                 />
                 <MetricCard
                     icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>}
                     value={health?.status === 'ok' ? 'Online' : '—'}
                     label="Server Status"
-                    glow="green"
+                    live={health?.status === 'ok'}
                 />
                 <MetricCard
                     icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
                     value={health?.version || '—'}
                     label="Version"
-                    glow="orange"
                 />
             </div>
 
             {/* Grid */}
             <div className="dashboard-grid">
-                <div className="card">
+                <motion.div className="card" variants={item}>
                     <div className="card-header">
                         <h3>Collections Overview</h3>
                         <button className="btn btn-sm btn-primary" onClick={() => navigate('collections')}>View All</button>
@@ -69,9 +78,9 @@ export default function Dashboard({ navigate }) {
                             ))
                         )}
                     </div>
-                </div>
+                </motion.div>
 
-                <div className="card">
+                <motion.div className="card" variants={item}>
                     <div className="card-header">
                         <h3>Quick Actions</h3>
                     </div>
@@ -96,37 +105,40 @@ export default function Dashboard({ navigate }) {
                         />
                         <ActionButton
                             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /></svg>}
-                            title="3D Explorer"
+                            title="Deep Field"
                             desc="Visualize vector spaces"
                             onClick={() => navigate('visualizer')}
                         />
                     </div>
-                </div>
+                </motion.div>
             </div>
-        </div>
+        </motion.div>
     );
 }
 
-function MetricCard({ icon, value, label, glow }) {
+function MetricCard({ icon, value, label, accent, live }) {
     return (
-        <div className={`metric-card glow-${glow}`}>
+        <motion.div className={`metric-card ${accent ? 'metric-accent' : ''}`} variants={item} whileHover={{ y: -3 }}>
             <div className="metric-icon">{icon}</div>
             <div className="metric-info">
-                <span className="metric-value">{value}</span>
+                <span className="metric-value">
+                    {value}
+                    {live && <span className="metric-live-dot" />}
+                </span>
                 <span className="metric-label">{label}</span>
             </div>
-        </div>
+        </motion.div>
     );
 }
 
 function ActionButton({ icon, title, desc, onClick }) {
     return (
-        <button className="action-btn" onClick={onClick}>
+        <motion.button className="action-btn" onClick={onClick} whileHover={{ x: 4 }} whileTap={{ scale: 0.98 }}>
             {icon}
             <div>
                 <strong>{title}</strong>
                 <small>{desc}</small>
             </div>
-        </button>
+        </motion.button>
     );
 }

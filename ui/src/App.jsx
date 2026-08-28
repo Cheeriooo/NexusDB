@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import Dashboard from './pages/Dashboard';
@@ -14,7 +15,7 @@ const VIEWS = {
   collections: { title: 'Collections', component: Collections },
   vectors: { title: 'Insert Vectors', component: Vectors },
   search: { title: 'Search Playground', component: Search },
-  visualizer: { title: '3D Vector Explorer', component: Visualizer },
+  visualizer: { title: 'Deep Field', component: Visualizer },
 };
 
 export default function App() {
@@ -50,9 +51,18 @@ export default function App() {
           title={VIEWS[activeView].title}
           onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
         />
-        <div className="view-container">
-          <ActivePage navigate={switchView} addToast={addToast} />
-        </div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeView}
+            className="view-container"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <ActivePage navigate={switchView} addToast={addToast} />
+          </motion.div>
+        </AnimatePresence>
       </main>
       <Toast toasts={toasts} />
     </>

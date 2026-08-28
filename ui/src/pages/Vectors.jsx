@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api';
 import './Vectors.css';
 
@@ -240,14 +241,22 @@ export default function Vectors({ addToast }) {
                 </div>
             </div>
 
-            {result && (
-                <div className="card result-card">
-                    <div className="card-header"><h3>Result</h3></div>
-                    <div className="card-body">
-                        <pre className="result-pre">{JSON.stringify(result, null, 2)}</pre>
-                    </div>
-                </div>
-            )}
+            <AnimatePresence>
+                {result && (
+                    <motion.div
+                        className="card result-card"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                        <div className="card-header"><h3>Result</h3></div>
+                        <div className="card-body">
+                            <pre className="result-pre">{JSON.stringify(result, null, 2)}</pre>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
 import './Sidebar.css';
 
@@ -33,7 +34,7 @@ const NAV_ITEMS = [
     },
     {
         id: 'visualizer',
-        label: '3D Explorer',
+        label: 'Deep Field',
         icon: (
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
         ),
@@ -56,52 +57,67 @@ export default function Sidebar({ activeView, onNavigate, isOpen, onClose }) {
 
     return (
         <>
-            {isOpen && <div className="sidebar-backdrop" onClick={onClose} />}
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        className="sidebar-backdrop"
+                        onClick={onClose}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                    />
+                )}
+            </AnimatePresence>
             <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
                 <div className="sidebar-header">
                     <div className="logo">
-                        <div className="logo-icon">
+                        <div className="logo-mark">
                             <svg viewBox="0 0 32 32" fill="none">
-                                <circle cx="16" cy="16" r="14" stroke="url(#lg)" strokeWidth="2" />
-                                <circle cx="16" cy="10" r="3" fill="url(#lg)" />
-                                <circle cx="10" cy="20" r="3" fill="url(#lg)" />
-                                <circle cx="22" cy="20" r="3" fill="url(#lg)" />
-                                <line x1="16" y1="10" x2="10" y2="20" stroke="url(#lg)" strokeWidth="1.5" opacity="0.6" />
-                                <line x1="16" y1="10" x2="22" y2="20" stroke="url(#lg)" strokeWidth="1.5" opacity="0.6" />
-                                <line x1="10" y1="20" x2="22" y2="20" stroke="url(#lg)" strokeWidth="1.5" opacity="0.6" />
-                                <defs>
-                                    <linearGradient id="lg" x1="0" y1="0" x2="32" y2="32">
-                                        <stop offset="0%" stopColor="#171717" />
-                                        <stop offset="100%" stopColor="#171717" />
-                                    </linearGradient>
-                                </defs>
+                                <circle cx="16" cy="10" r="2.2" fill="var(--accent)" />
+                                <circle cx="9" cy="21" r="2.2" fill="var(--text-secondary)" />
+                                <circle cx="23" cy="21" r="2.2" fill="var(--text-secondary)" />
+                                <line x1="16" y1="10" x2="9" y2="21" stroke="var(--border-hover)" strokeWidth="1.2" />
+                                <line x1="16" y1="10" x2="23" y2="21" stroke="var(--border-hover)" strokeWidth="1.2" />
+                                <line x1="9" y1="21" x2="23" y2="21" stroke="var(--border-hover)" strokeWidth="1.2" />
                             </svg>
                         </div>
                         <div className="logo-text">
                             <span className="logo-name">NexusDB</span>
-                            <span className="logo-version">v0.1.0</span>
+                            <span className="logo-version">rev.0.1.0</span>
                         </div>
                     </div>
                 </div>
 
                 <nav className="sidebar-nav">
-                    {NAV_ITEMS.map((item) => (
-                        <button
-                            key={item.id}
-                            className={`nav-item ${activeView === item.id ? 'active' : ''}`}
-                            onClick={() => onNavigate(item.id)}
-                        >
-                            {item.icon}
-                            <span>{item.label}</span>
-                        </button>
-                    ))}
+                    {NAV_ITEMS.map((item) => {
+                        const active = activeView === item.id;
+                        return (
+                            <button
+                                key={item.id}
+                                className={`nav-item ${active ? 'active' : ''}`}
+                                onClick={() => onNavigate(item.id)}
+                            >
+                                {active && (
+                                    <motion.span
+                                        layoutId="nav-active"
+                                        className="nav-active-bg"
+                                        transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                                    />
+                                )}
+                                <span className="nav-item-content">
+                                    {item.icon}
+                                    <span>{item.label}</span>
+                                </span>
+                            </button>
+                        );
+                    })}
                 </nav>
 
                 <div className="sidebar-footer">
                     <div className={`server-status ${connected ? 'connected' : ''}`}>
                         <span className="status-dot" />
                         <span className="status-text">
-                            {connected ? 'Server Online' : 'Disconnected'}
+                            {connected ? 'Link established' : 'No signal'}
                         </span>
                     </div>
                 </div>

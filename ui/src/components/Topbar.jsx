@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion';
 import './Topbar.css';
 
 export default function Topbar({ title, onMenuToggle }) {
@@ -10,9 +11,17 @@ export default function Topbar({ title, onMenuToggle }) {
                     <line x1="3" y1="18" x2="21" y2="18" />
                 </svg>
             </button>
-            <h1 className="page-title">{title}</h1>
+            <motion.h1
+                key={title}
+                className="page-title"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            >
+                {title}
+            </motion.h1>
             <div className="topbar-actions">
-                <span className="topbar-badge">NexusDB Console</span>
+                <span className="topbar-badge">NEXUSDB · CONSOLE</span>
             </div>
         </header>
     );
