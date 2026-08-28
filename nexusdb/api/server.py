@@ -6,13 +6,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from nexusdb.core.collection import Collection
 from nexusdb.core.vector import Vector
 from nexusdb.persistence.config import AUTO_PERSIST, get_collection_db_path
+from nexusdb.persistence.sqlite_backend import SQLiteBackend
 
 # ---------------------------------------------------------------------------
 # App
@@ -36,6 +37,19 @@ app.add_middleware(
 # In-memory store of collections
 _collections: dict[str, Collection] = {}
 
+# One SQLiteBackend per collection, reused across writes so auto-persist can
+# do incremental upserts/deletes instead of rewriting the whole table file
+# on every single vector write.
+_backends: dict[str, SQLiteBackend] = {}
+
+
+def _get_backend(collection_name: str) -> SQLiteBackend:
+    backend = _backends.get(collection_name)
+    if backend is None:
+        backend = SQLiteBackend(get_collection_db_path(collection_name))
+        _backends[collection_name] = backend
+    return backend
+
 
 # ---------------------------------------------------------------------------
 # Persistence handlers
@@ -57,9 +71,10 @@ async def startup_event():
                 col = Collection.load(db_file)
                 if col:
                     _collections[col.name] = col
-                    print(f"✅ Loaded collection: {col.name} ({col.count} vectors)")
+                    _backends[col.name] = SQLiteBackend(db_file)
+                    print(f"[ok] Loaded collection: {col.name} ({col.count} vectors)")
             except Exception as e:
-                print(f"⚠️  Failed to load {db_file}: {e}")
+                print(f"[warn] Failed to load {db_file}: {e}")
 
 
 @app.on_event("shutdown")
@@ -72,22 +87,47 @@ async def shutdown_event():
         try:
             db_path = get_collection_db_path(name)
             col.save(db_path)
-            print(f"✅ Saved collection: {name} to {db_path}")
+            print(f"[ok] Saved collection: {name} to {db_path}")
         except Exception as e:
-            print(f"⚠️  Failed to save {name}: {e}")
+            print(f"[warn] Failed to save {name}: {e}")
 
 
-def _auto_save_collection(collection_name: str) -> None:
-    """Helper to auto-save a collection if AUTO_PERSIST is enabled."""
+def _auto_persist_upsert(collection_name: str, vectors: list[Vector]) -> None:
+    """Incrementally persist newly-upserted vectors, if auto-persist is enabled."""
     if not AUTO_PERSIST or collection_name not in _collections:
         return
-
     try:
         col = _collections[collection_name]
-        db_path = get_collection_db_path(collection_name)
-        col.save(db_path)
+        backend = _get_backend(collection_name)
+        backend.upsert_metadata(
+            collection_name=col.name,
+            dimension=col.dimension,
+            metric=col.metric,
+            created_at=col.created_at.isoformat(),
+            updated_at=col.updated_at.isoformat(),
+        )
+        backend.upsert_vectors(vectors)
     except Exception as e:
-        print(f"⚠️  Failed to auto-save collection {collection_name}: {e}")
+        print(f"[warn] Failed to auto-persist upsert for {collection_name}: {e}")
+
+
+def _auto_persist_delete(collection_name: str, vector_id: str) -> None:
+    """Incrementally persist a vector deletion, if auto-persist is enabled."""
+    if not AUTO_PERSIST or collection_name not in _collections:
+        return
+    try:
+        col = _collections[collection_name]
+        backend = _get_backend(collection_name)
+        backend.delete_vectors([vector_id])
+        backend.upsert_metadata(
+            collection_name=col.name,
+            dimension=col.dimension,
+            metric=col.metric,
+            created_at=col.created_at.isoformat(),
+            updated_at=col.updated_at.isoformat(),
+        )
+    except Exception as e:
+        print(f"[warn] Failed to auto-persist delete for {collection_name}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +168,7 @@ class UpsertResponse(BaseModel):
 
 class SearchRequest(BaseModel):
     vector: list[float]
-    k: int = 10
+    k: int = Field(default=10, gt=0)
     collection: str
     include_metadata: bool = True
     include_values: bool = False
@@ -258,18 +298,29 @@ def create_collection(req: CollectionCreate):
     # Auto-save if enabled
     if AUTO_PERSIST:
         try:
-            db_path = get_collection_db_path(req.name)
-            col.save(db_path)
+            backend = _get_backend(req.name)
+            backend.upsert_metadata(
+                collection_name=col.name,
+                dimension=col.dimension,
+                metric=col.metric,
+                created_at=col.created_at.isoformat(),
+                updated_at=col.updated_at.isoformat(),
+            )
         except Exception as e:
-            print(f"⚠️  Failed to auto-save collection {req.name}: {e}")
+            print(f"[warn] Failed to auto-save collection {req.name}: {e}")
 
     return CollectionInfo(**col.info())
 
 
 @app.get("/collections", response_model=list[CollectionInfo])
-def list_collections():
-    """List all collections."""
-    return [CollectionInfo(**col.info()) for col in _collections.values()]
+def list_collections(
+    limit: int = Query(default=100, gt=0, le=1000),
+    offset: int = Query(default=0, ge=0),
+):
+    """List collections, paginated (default page size 100, ordered by name)."""
+    names = sorted(_collections.keys())
+    page = names[offset : offset + limit]
+    return [CollectionInfo(**_collections[name].info()) for name in page]
 
 
 @app.get("/collections/{name}", response_model=CollectionInfo)
@@ -287,6 +338,7 @@ def delete_collection(name: str):
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
 
     del _collections[name]
+    _backends.pop(name, None)
 
     # Clean up persisted data if enabled
     if AUTO_PERSIST:
@@ -296,8 +348,12 @@ def delete_collection(name: str):
             db_path = get_collection_db_path(name)
             if db_path.exists():
                 os.remove(db_path)
+            for suffix in ("-wal", "-shm"):
+                sidecar = db_path.with_name(db_path.name + suffix)
+                if sidecar.exists():
+                    os.remove(sidecar)
         except Exception as e:
-            print(f"⚠️  Failed to delete persisted data for {name}: {e}")
+            print(f"[warn] Failed to delete persisted data for {name}: {e}")
 
     return {"message": f"Collection '{name}' deleted"}
 
@@ -335,8 +391,8 @@ def upsert_vectors(req: UpsertRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    # Auto-save if enabled
-    _auto_save_collection(req.collection)
+    # Auto-persist if enabled — incremental, not a full-table rewrite.
+    _auto_persist_upsert(req.collection, vectors)
 
     return UpsertResponse(ids=ids, count=len(ids))
 
@@ -403,8 +459,8 @@ def delete_vector(collection: str, vector_id: str):
     if not removed:
         raise HTTPException(status_code=404, detail=f"Vector '{vector_id}' not found")
 
-    # Auto-save if enabled
-    _auto_save_collection(collection)
+    # Auto-persist if enabled — incremental, not a full-table rewrite.
+    _auto_persist_delete(collection, vector_id)
 
     return {"message": f"Vector '{vector_id}' deleted"}
 
@@ -501,10 +557,10 @@ def _get_embedding_model(model_name: str = "all-MiniLM-L6-v2"):
         try:
             from sentence_transformers import SentenceTransformer
 
-            print(f"🔄 Loading embedding model '{model_name}'...")
+            print(f"[info] Loading embedding model '{model_name}'...")
             _embedding_model = SentenceTransformer(model_name)
             _embedding_model_name = model_name
-            print(f"✅ Embedding model '{model_name}' loaded.")
+            print(f"[ok] Embedding model '{model_name}' loaded.")
         except ImportError as e:
             raise HTTPException(
                 status_code=501,
@@ -577,7 +633,7 @@ def embed_upsert_vectors(req: EmbedUpsertRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    _auto_save_collection(req.collection)
+    _auto_persist_upsert(req.collection, vectors)
     return UpsertResponse(ids=ids, count=len(ids))
 
 

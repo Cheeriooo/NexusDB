@@ -128,6 +128,14 @@ class FlatIndex:
 
             matrix = self._matrix
             id_list = self._id_list
+            # Snapshot the id->Vector mapping under the same lock as the
+            # matrix/id_list above. self._vectors is mutated in place by
+            # add()/remove() (dict item assignment/deletion), unlike _matrix
+            # and _id_list which are reassigned wholesale on rebuild — so
+            # without this snapshot, a concurrent write during the
+            # lock-free distance computation below could hand back a
+            # Vector added/removed after this search's matrix was built.
+            vectors_snapshot = dict(self._vectors)
 
         # Apply ID filter
         if ids_filter is not None:
@@ -159,7 +167,7 @@ class FlatIndex:
                 SearchResult(
                     id=vid,
                     distance=float(distances[idx]),
-                    vector=self._vectors.get(vid),
+                    vector=vectors_snapshot.get(vid),
                 )
             )
 

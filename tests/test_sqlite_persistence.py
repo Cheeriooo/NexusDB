@@ -3,8 +3,10 @@
 import tempfile
 from pathlib import Path
 
+from nexusdb.cli import backup, restore
 from nexusdb.core.collection import Collection
 from nexusdb.core.vector import Vector
+from nexusdb.persistence.sqlite_backend import SQLiteBackend
 
 
 def test_save_and_load():
@@ -55,6 +57,74 @@ def test_save_and_load():
         print("✅ All tests passed!")
     finally:
         # Clean up
+        import shutil
+
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_incremental_upsert_and_delete_do_not_rewrite_whole_table():
+    """upsert_vectors/delete_vectors touch only the given rows, not the table."""
+    tmpdir = tempfile.mkdtemp()
+    try:
+        db_path = Path(tmpdir) / "incremental.db"
+        backend = SQLiteBackend(db_path)
+
+        backend.upsert_metadata(
+            collection_name="inc",
+            dimension=3,
+            metric="cosine",
+            created_at="2026-01-01T00:00:00+00:00",
+            updated_at="2026-01-01T00:00:00+00:00",
+        )
+        v1 = Vector(embedding=[0.1, 0.2, 0.3], id="a")
+        v2 = Vector(embedding=[0.4, 0.5, 0.6], id="b")
+        backend.upsert_vectors([v1, v2])
+
+        info, vectors = backend.load_collection()
+        assert info["name"] == "inc"
+        assert {v.id for v in vectors} == {"a", "b"}
+
+        # Incremental update of an existing id should replace, not duplicate.
+        v1_updated = Vector(embedding=[0.9, 0.9, 0.9], id="a")
+        backend.upsert_vectors([v1_updated])
+        _, vectors = backend.load_collection()
+        assert len(vectors) == 2
+        updated = next(v for v in vectors if v.id == "a")
+        assert list(updated.embedding) == [0.9, 0.9, 0.9]
+
+        # Incremental delete removes only the targeted row.
+        backend.delete_vectors(["b"])
+        _, vectors = backend.load_collection()
+        assert {v.id for v in vectors} == {"a"}
+    finally:
+        import shutil
+
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_cli_backup_and_restore_round_trip():
+    """nexusdb backup/restore wraps Collection.save/load without needing the API."""
+    tmpdir = tempfile.mkdtemp()
+    try:
+        persist_dir = Path(tmpdir) / "persist"
+        persist_dir.mkdir()
+
+        col = Collection(name="cli_test", dimension=3, metric="cosine")
+        col.add([Vector(embedding=[1.0, 2.0, 3.0], id="x")])
+        col.save(persist_dir / "cli_test.db")
+
+        backup_path = Path(tmpdir) / "cli_test.backup.db"
+        assert backup("cli_test", str(backup_path), persist_dir) == 0
+        assert backup_path.exists()
+
+        restore_dir = Path(tmpdir) / "restored"
+        assert restore(str(backup_path), None, restore_dir) == 0
+
+        restored = Collection.load(restore_dir / "cli_test.db")
+        assert restored is not None
+        assert restored.count == 1
+        assert restored.get("x") is not None
+    finally:
         import shutil
 
         shutil.rmtree(tmpdir, ignore_errors=True)

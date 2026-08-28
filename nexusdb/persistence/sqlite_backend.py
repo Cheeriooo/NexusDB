@@ -26,6 +26,10 @@ class SQLiteBackend:
     def _init_db(self) -> None:
         """Initialize database schema."""
         with sqlite3.connect(self.db_path) as conn:
+            # WAL mode lets readers proceed while a write transaction is in
+            # flight, and survives a killed process without corrupting the
+            # file (the -wal file is replayed on next open).
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS vectors (
                     id TEXT PRIMARY KEY,
@@ -41,6 +45,71 @@ class SQLiteBackend:
                     value TEXT
                 )
                 """)
+            conn.commit()
+
+    def upsert_vectors(self, vectors: list[Vector]) -> None:
+        """Incrementally insert or update a batch of vectors.
+
+        Unlike `save_collection`, this touches only the given rows — safe to
+        call on every write without rewriting the whole table.
+        """
+        if not vectors:
+            return
+        with sqlite3.connect(self.db_path) as conn:
+            rows = []
+            for vec in vectors:
+                embedding_bytes = vec.embedding.astype(np.float32).tobytes()
+                metadata_json = json.dumps(vec.metadata) if vec.metadata else None
+                timestamp = vec.timestamp.isoformat() if vec.timestamp else None
+                rows.append((vec.id, embedding_bytes, metadata_json, timestamp, timestamp))
+            conn.executemany(
+                """
+                INSERT INTO vectors (id, embedding, metadata, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    embedding = excluded.embedding,
+                    metadata = excluded.metadata,
+                    updated_at = excluded.updated_at
+                """,
+                rows,
+            )
+            conn.commit()
+
+    def delete_vectors(self, vector_ids: list[str]) -> None:
+        """Incrementally delete a batch of vectors by ID."""
+        if not vector_ids:
+            return
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                "DELETE FROM vectors WHERE id = ?",
+                [(vid,) for vid in vector_ids],
+            )
+            conn.commit()
+
+    def upsert_metadata(
+        self,
+        collection_name: str,
+        dimension: int,
+        metric: str,
+        created_at: str,
+        updated_at: str,
+    ) -> None:
+        """Insert or update collection metadata rows without touching vectors."""
+        metadata = {
+            "name": collection_name,
+            "dimension": dimension,
+            "metric": metric,
+            "created_at": created_at,
+            "updated_at": updated_at,
+        }
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                """
+                INSERT INTO collection_metadata (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                [(k, str(v)) for k, v in metadata.items()],
+            )
             conn.commit()
 
     def save_collection(

@@ -11,11 +11,12 @@ Legend: ✅ done · 🟡 partial · ❌ missing
 
 | Item | Status | Notes |
 |---|---|---|
-| Input validation on all endpoints | 🟡 | Pydantic covers shape/types; dimension/metric mismatches return 400 |
-| Durable writes (crash-safe persistence) | ❌ | Full-table rewrite per save, no WAL, off by default |
-| Backup / restore story | ❌ | No documented or automated backup path |
+| Input validation on all endpoints | 🟡 | Pydantic covers shape/types; dimension/metric mismatches return 400; `k<=0` now rejected with 422 |
+| Durable writes (crash-safe persistence) | ✅ | Incremental upsert/delete against SQLite + `PRAGMA journal_mode=WAL`; verified with a hard `taskkill /F` mid-session — data survived intact. Still off by default (`NEXUSDB_AUTO_PERSIST`) |
+| Backup / restore story | ✅ | `nexusdb backup <collection> <path>` / `nexusdb restore <path>` CLI, exercised end-to-end against a live persisted collection |
 | Data migration story (schema changes) | ❌ | SQLite schema has no version column |
 | Idempotent upsert | ✅ | Upsert-by-id is idempotent by construction |
+| Concurrency correctness | ✅ | Fixed a real race in `FlatIndex.search` (read `_vectors` outside the lock after snapshotting `_matrix`); covered by a threaded stress test |
 
 ## Security
 
@@ -38,12 +39,13 @@ Legend: ✅ done · 🟡 partial · ❌ missing
 | Health checks | 🟡 | `/health` exists; no separate readiness vs. liveness semantics |
 | Load/perf testing | ❌ | No benchmark numbers published anywhere |
 | Resource limits documented (memory per N vectors) | ❌ | Not measured or written down |
+| Pagination on list endpoints | ✅ | `GET /collections` supports `limit`/`offset` (default 100, max 1000) |
 
 ## Observability
 
 | Item | Status | Notes |
 |---|---|---|
-| Structured logging | ❌ | `print()` statements only |
+| Structured logging | ❌ | `print()` statements only (emoji removed 2026-08-28 — they crashed FastAPI startup on Windows via `cp1252`; still not structured/leveled, that's Phase 4) |
 | Metrics (Prometheus/OpenTelemetry) | ❌ | None |
 | Distributed tracing | ❌ | None |
 | Error tracking (Sentry or similar) | ❌ | None |
@@ -53,30 +55,30 @@ Legend: ✅ done · 🟡 partial · ❌ missing
 
 | Item | Status | Notes |
 |---|---|---|
-| Backend unit tests | ✅ | `tests/` covers api, collection, distance, flat_index, sqlite_persistence, vector |
-| Coverage measured/enforced | 🟡 | `pytest-cov` is a dependency; no CI to run or gate on it |
+| Backend unit tests | ✅ | `tests/` covers api, collection, distance, flat_index, sqlite_persistence, vector — 89 tests, verified passing locally 2026-08-28 |
+| Coverage measured/enforced | 🟡 | `pytest --cov` runs in CI (72% total); no minimum-threshold gate yet |
 | Frontend tests | ❌ | No Vitest/RTL setup in `ui/` |
 | End-to-end tests | ❌ | None |
-| CI pipeline | ❌ | No `.github/workflows` |
-| Lint/format enforced in CI | ❌ | `eslint.config.js` exists for the UI but isn't run in CI; no Python linter configured |
+| CI pipeline | ✅ | `.github/workflows/ci.yml`: backend (ruff/black/pytest), frontend (eslint/build), docker build jobs |
+| Lint/format enforced in CI | ✅ | `ruff`/`black --check` (backend) and `eslint` (frontend) both run in CI; verified clean locally |
 | Type checking | 🟡 | Python uses type hints throughout; no `mypy`/`pyright` run |
 
 ## Deployment & Ops
 
 | Item | Status | Notes |
 |---|---|---|
-| Containerized (Docker) | ❌ | No Dockerfile |
-| One-command local dev | 🟡 | `pip install -e .` + `npm install` works but isn't scripted/documented end-to-end |
-| Deployed demo (live URL) | ❌ | This matters more than almost anything else for a portfolio piece |
-| Environment-based config | 🟡 | `NEXUSDB_AUTO_PERSIST` / `NEXUSDB_PERSIST_DIR` exist; no `.env.example`, no config doc |
+| Containerized (Docker) | ✅ | Root `Dockerfile` (API) + `ui/Dockerfile` (nginx) + `docker-compose.yml`; `docker compose build` verified successful 2026-08-28, `up` end-to-end pass still pending |
+| One-command local dev | ✅ | `docker compose up` (once verified end-to-end) or `pip install -e ".[dev]"` + `npm ci` — both paths confirmed working locally |
+| Deployed demo (live URL) | ❌ | Deliberately deferred — doing local/server verification first, live demo bundled with Phase 6 |
+| Environment-based config | ✅ | `.env.example` documents `NEXUSDB_AUTO_PERSIST` / `NEXUSDB_PERSIST_DIR` and UI's `VITE_API_BASE` |
 | Reverse proxy / TLS story | ❌ | Not applicable locally; needs a plan for deployment |
 
 ## Documentation & Project Hygiene
 
 | Item | Status | Notes |
 |---|---|---|
-| README with problem statement, architecture, demo link | 🟡 | README currently one line — biggest single portfolio-impact gap |
-| LICENSE file | ❌ | `pyproject.toml` claims MIT but no `LICENSE` file exists |
+| README with problem statement, architecture, demo link | 🟡 | Still needs the Phase 7 rewrite (architecture diagram, GIF, benchmark numbers, demo link) |
+| LICENSE file | ✅ | MIT `LICENSE` present, matches `pyproject.toml` |
 | CONTRIBUTING.md | ❌ | None |
 | Architecture docs | ✅ | `docs/ARCHITECTURE.md` (this doc set) |
 | API docs | 🟡 | FastAPI auto-generates `/docs`; `docs/API_REFERENCE.md` adds a map |
