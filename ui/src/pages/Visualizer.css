@@ -19,6 +19,11 @@
     display: block;
 }
 
+.deep-field-canvas {
+    position: absolute;
+    inset: 0;
+}
+
 .viz-empty-overlay,
 .viz-loading-overlay {
     position: absolute;

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useMotionValue, useScroll, useSpring, useTransform } from 'framer-motion';
-import { api } from '../api';
+import { animate, createScope, onScroll, stagger } from 'animejs';
 import './Landing.css';
 
-const PHOTO_CREDIT = { name: 'Dawid Zawiła', url: 'https://unsplash.com/photos/green-grass-fiels-9d33wIMMzoE' };
+const REPO_URL = 'https://github.com/Cheeriooo/NexusDB';
 
 const FEATURES = [
     {
@@ -73,7 +73,6 @@ function TiltCard({ className, children }) {
         <motion.div
             ref={ref}
             className={className}
-            variants={fadeUp}
             style={{ rotateX, rotateY, transformPerspective: 900 }}
             onMouseMove={onMouseMove}
             onMouseLeave={onMouseLeave}
@@ -87,16 +86,21 @@ function TiltCard({ className, children }) {
 export default function Landing() {
     const navigate = useNavigate();
     const [scrolled, setScrolled] = useState(false);
-    const [online, setOnline] = useState(null);
     const { scrollY } = useScroll();
     const heroOpacity = useTransform(scrollY, [0, 420], [1, 0.15]);
     const heroY = useTransform(scrollY, [0, 420], [0, 60]);
 
+    const bottomRef = useRef(null);
+    const featuresRef = useRef(null);
+    const quickStartRef = useRef(null);
+    const ctaRef = useRef(null);
+    const footerRef = useRef(null);
+
     useEffect(() => {
-        const onScroll = () => setScrolled(window.scrollY > 24);
-        onScroll();
-        window.addEventListener('scroll', onScroll, { passive: true });
-        return () => window.removeEventListener('scroll', onScroll);
+        const handleScroll = () => setScrolled(window.scrollY > 24);
+        handleScroll();
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
     useEffect(() => {
@@ -109,11 +113,74 @@ export default function Landing() {
         };
     }, []);
 
+    /* Everything from "Built for vector-native apps" down is revealed
+       with anime.js instead of framer-motion — scoped to landing-bottom
+       so it's cleanly torn down (scope.revert()) on unmount. */
     useEffect(() => {
-        const check = () => api.health().then(() => setOnline(true)).catch(() => setOnline(false));
-        check();
-        const interval = setInterval(check, 8000);
-        return () => clearInterval(interval);
+        const scope = createScope({ root: bottomRef }).add(() => {
+            const reveal = (targets, opts = {}) => animate(targets, {
+                opacity: [0, 1],
+                translateY: [16, 0],
+                duration: 600,
+                ease: 'outQuad',
+                ...opts,
+            });
+
+            reveal('#features .section-eyebrow, #features > .section-inner > h2', {
+                delay: stagger(80),
+                autoplay: onScroll({ target: featuresRef.current }),
+            });
+            animate('.bento-hero-card', {
+                opacity: [0, 1],
+                duration: 700,
+                ease: 'outQuad',
+                autoplay: onScroll({ target: featuresRef.current }),
+            });
+            reveal('.feature-card', {
+                delay: stagger(110, { start: 150 }),
+                autoplay: onScroll({ target: featuresRef.current }),
+            });
+
+            reveal('#quick-start .section-eyebrow, #quick-start h2, .quick-start-lede', {
+                delay: stagger(80),
+                autoplay: onScroll({ target: quickStartRef.current }),
+            });
+            animate('.quick-start-steps li', {
+                opacity: [0, 1],
+                translateX: [-18, 0],
+                duration: 500,
+                delay: stagger(120, { start: 200 }),
+                ease: 'outQuad',
+                autoplay: onScroll({ target: quickStartRef.current }),
+            });
+            animate('.code-line', {
+                opacity: [0, 1],
+                translateX: [18, 0],
+                duration: 450,
+                delay: stagger(150, { start: 250 }),
+                ease: 'outQuad',
+                autoplay: onScroll({ target: quickStartRef.current }),
+            });
+
+            animate('.landing-cta', {
+                opacity: [0, 1],
+                scale: [0.98, 1],
+                duration: 650,
+                ease: 'outQuad',
+                autoplay: onScroll({ target: ctaRef.current }),
+            });
+
+            animate('.landing-footer .landing-logo, .landing-footer .footer-right', {
+                opacity: [0, 1],
+                translateY: [10, 0],
+                duration: 500,
+                delay: stagger(100),
+                ease: 'outQuad',
+                autoplay: onScroll({ target: footerRef.current }),
+            });
+        });
+
+        return () => scope.revert();
     }, []);
 
     return (
@@ -145,11 +212,11 @@ export default function Landing() {
                         <a href="#quick-start" className="btn-ghost-nav">Quick Start</a>
                         <motion.button
                             className="btn-filled-nav"
-                            onClick={() => navigate('/app')}
+                            onClick={() => navigate('/demo')}
                             whileHover={{ scale: 1.04 }}
                             whileTap={{ scale: 0.96 }}
                         >
-                            Try it
+                            Try the demo
                         </motion.button>
                     </div>
                 </div>
@@ -177,7 +244,7 @@ export default function Landing() {
                     <motion.div className="hero-actions" variants={fadeUp}>
                         <motion.button
                             className="btn-filled-lg"
-                            onClick={() => navigate('/app')}
+                            onClick={() => navigate('/demo')}
                             whileHover={{ scale: 1.03, y: -1 }}
                             whileTap={{ scale: 0.97 }}
                         >
@@ -193,6 +260,9 @@ export default function Landing() {
                             Quick start
                         </motion.a>
                     </motion.div>
+                    <motion.p className="hero-actions-hint" variants={fadeUp}>
+                        The demo runs entirely in your browser with sample data — no signup, no server to run.
+                    </motion.p>
                 </motion.div>
 
                 <div className="hero-product-card">
@@ -201,11 +271,11 @@ export default function Landing() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.7, delay: 0.25, ease: EASE }}
                     >
-                        <motion.div
-                            className="mock-console"
-                            animate={{ y: [0, -8, 0] }}
-                            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1.2 }}
-                        >
+                        {/* The float here is a plain CSS animation (see .mock-console
+                            in Landing.css) rather than a framer-motion loop — it runs
+                            on the compositor only and stays smooth regardless of what
+                            else framer or anime.js are doing elsewhere on the page. */}
+                        <div className="mock-console">
                             <div className="mock-sidebar">
                                 <div className="mock-logo">
                                     <span className="mock-dot" />
@@ -227,177 +297,109 @@ export default function Landing() {
                                     <div className="mock-panel-row short" />
                                 </div>
                             </div>
-                        </motion.div>
+                        </div>
                     </motion.div>
                 </div>
             </header>
 
-            <section id="features" className="landing-section">
-                <div className="section-inner">
-                    <motion.span
-                        className="section-eyebrow"
-                        initial={{ opacity: 0, y: 12 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true, margin: '-80px' }}
-                        transition={{ duration: 0.4, ease: EASE }}
-                    >
-                        Built for vector-native apps
-                    </motion.span>
-                    <motion.h2
-                        initial={{ opacity: 0, y: 12 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true, margin: '-80px' }}
-                        transition={{ duration: 0.45, ease: EASE, delay: 0.05 }}
-                    >
-                        Everything you need to ship search that understands meaning.
-                    </motion.h2>
+            <div className="landing-bottom" ref={bottomRef}>
+                <section id="features" className="landing-section" ref={featuresRef}>
+                    <div className="section-inner">
+                        <span className="section-eyebrow">Built for vector-native apps</span>
+                        <h2>Everything you need to ship search that understands meaning.</h2>
 
-                    <motion.div
-                        className="bento-grid"
-                        variants={staggerContainer}
-                        initial="hidden"
-                        whileInView="show"
-                        viewport={{ once: true, margin: '-80px' }}
-                    >
-                        <TiltCard className="bento-hero-card">
-                            <div className="bento-hero-art">
-                                <div className="bento-hero-glyph">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
+                        <div className="bento-grid">
+                            <TiltCard className="bento-hero-card">
+                                <div className="bento-hero-art">
+                                    <div className="bento-hero-glyph">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="bento-hero-copy">
-                                <span className="feature-eyebrow">Explore</span>
-                                <h3>Deep Field visualizer</h3>
-                                <p>Project a collection into 3D with PCA and fly through the embedding space to see how your data actually clusters.</p>
-                            </div>
-                        </TiltCard>
+                                <div className="bento-hero-copy">
+                                    <span className="feature-eyebrow">Explore</span>
+                                    <h3>Deep Field visualizer</h3>
+                                    <p>Project a collection into 3D with PCA and fly through the embedding space to see how your data actually clusters.</p>
+                                </div>
+                            </TiltCard>
 
-                        <div className="bento-row">
-                            {FEATURES.map((f) => (
-                                <motion.div
-                                    key={f.title}
-                                    className="feature-card"
-                                    variants={fadeUp}
-                                    whileHover={{ y: -4, boxShadow: 'var(--shadow-glow)' }}
-                                >
-                                    <div className="feature-icon">{f.icon}</div>
-                                    <span className="feature-eyebrow">{f.eyebrow}</span>
-                                    <h3>{f.title}</h3>
-                                    <p>{f.desc}</p>
-                                </motion.div>
+                            <div className="bento-row">
+                                {FEATURES.map((f) => (
+                                    <div key={f.title} className="feature-card">
+                                        <div className="feature-icon">{f.icon}</div>
+                                        <span className="feature-eyebrow">{f.eyebrow}</span>
+                                        <h3>{f.title}</h3>
+                                        <p>{f.desc}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="quick-start" className="landing-section alt" ref={quickStartRef}>
+                    <div className="section-inner quick-start-grid">
+                        <div>
+                            <span className="section-eyebrow">Get running</span>
+                            <h2>Up in three commands.</h2>
+                            <p className="quick-start-lede">
+                                The console runs on :8080, the API on :8000. Everything else — persistence,
+                                embeddings, the visualizer — is wired up by default.
+                            </p>
+                            <ol className="quick-start-steps">
+                                {STEPS.map((s) => (
+                                    <li key={s.label}>
+                                        <span className="step-label">{s.label}</span>
+                                    </li>
+                                ))}
+                            </ol>
+                        </div>
+                        <div className="quick-start-code">
+                            {STEPS.map((s) => (
+                                <div key={s.code} className="code-line">
+                                    <span className="code-prompt">$</span>
+                                    <code>{s.code}</code>
+                                </div>
                             ))}
                         </div>
-                    </motion.div>
-                </div>
-            </section>
-
-            <section id="quick-start" className="landing-section alt">
-                <div className="section-inner quick-start-grid">
-                    <div>
-                        <motion.span
-                            className="section-eyebrow"
-                            initial={{ opacity: 0, y: 12 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true, margin: '-80px' }}
-                            transition={{ duration: 0.4, ease: EASE }}
-                        >
-                            Get running
-                        </motion.span>
-                        <motion.h2
-                            initial={{ opacity: 0, y: 12 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true, margin: '-80px' }}
-                            transition={{ duration: 0.45, ease: EASE, delay: 0.05 }}
-                        >
-                            Up in three commands.
-                        </motion.h2>
-                        <p className="quick-start-lede">
-                            The console runs on :8080, the API on :8000. Everything else — persistence,
-                            embeddings, the visualizer — is wired up by default.
-                        </p>
-                        <motion.ol
-                            className="quick-start-steps"
-                            variants={staggerContainer}
-                            initial="hidden"
-                            whileInView="show"
-                            viewport={{ once: true, margin: '-80px' }}
-                        >
-                            {STEPS.map((s) => (
-                                <motion.li key={s.label} variants={fadeUp}>
-                                    <span className="step-label">{s.label}</span>
-                                </motion.li>
-                            ))}
-                        </motion.ol>
                     </div>
-                    <motion.div
-                        className="quick-start-code"
-                        initial={{ opacity: 0, x: 24 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true, margin: '-80px' }}
-                        transition={{ duration: 0.5, ease: EASE, delay: 0.1 }}
-                    >
-                        {STEPS.map((s, i) => (
-                            <motion.div
-                                key={s.code}
-                                className="code-line"
-                                initial={{ opacity: 0 }}
-                                whileInView={{ opacity: 1 }}
-                                viewport={{ once: true, margin: '-80px' }}
-                                transition={{ duration: 0.3, delay: 0.2 + i * 0.15 }}
-                            >
-                                <span className="code-prompt">$</span>
-                                <code>{s.code}</code>
-                            </motion.div>
-                        ))}
-                    </motion.div>
-                </div>
-            </section>
+                </section>
 
-            <motion.section
-                className="landing-cta"
-                initial={{ opacity: 0, scale: 0.98 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true, margin: '-80px' }}
-                transition={{ duration: 0.5, ease: EASE }}
-            >
-                <div className="section-inner cta-inner">
-                    <h2>See your data as a space, not a table.</h2>
-                    <motion.button
-                        className="btn-filled-lg"
-                        onClick={() => navigate('/app')}
-                        whileHover={{ scale: 1.03, y: -1 }}
-                        whileTap={{ scale: 0.97 }}
-                    >
-                        Try it now
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-                    </motion.button>
-                </div>
-            </motion.section>
+                <section className="landing-cta" ref={ctaRef}>
+                    <div className="section-inner cta-inner">
+                        <h2>See your data as a space, not a table.</h2>
+                        <motion.button
+                            className="btn-filled-lg"
+                            onClick={() => navigate('/app')}
+                            whileHover={{ scale: 1.03, y: -1 }}
+                            whileTap={{ scale: 0.97 }}
+                        >
+                            Try it now
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                        </motion.button>
+                    </div>
+                </section>
 
-            <footer className="landing-footer">
-                <div className="section-inner footer-inner">
-                    <span className="landing-logo">
-                        <svg viewBox="0 0 32 32" fill="none" className="landing-logo-mark">
-                            <circle cx="16" cy="10" r="2.4" fill="var(--accent)" />
-                            <circle cx="9" cy="21" r="2.4" fill="currentColor" />
-                            <circle cx="23" cy="21" r="2.4" fill="currentColor" />
-                        </svg>
-                        <span>NexusDB</span>
-                    </span>
-                    <div className="footer-right">
-                        <span className={`footer-status ${online ? 'up' : ''}`}>
-                            <span className="footer-status-dot" />
-                            {online === null ? 'Checking API…' : online ? 'API online' : 'API offline'}
+                <footer className="landing-footer" ref={footerRef}>
+                    <div className="section-inner footer-inner">
+                        <span className="landing-logo">
+                            <svg viewBox="0 0 32 32" fill="none" className="landing-logo-mark">
+                                <circle cx="16" cy="10" r="2.4" fill="var(--accent)" />
+                                <circle cx="9" cy="21" r="2.4" fill="currentColor" />
+                                <circle cx="23" cy="21" r="2.4" fill="currentColor" />
+                            </svg>
+                            <span>NexusDB</span>
                         </span>
-                        <span className="footer-sep">·</span>
-                        <a className="footer-credit" href={PHOTO_CREDIT.url} target="_blank" rel="noreferrer">
-                            Photo by {PHOTO_CREDIT.name}
-                        </a>
-                        <span className="footer-sep">·</span>
-                        <span className="footer-meta">rev.0.1.0</span>
+                        <div className="footer-right">
+                            <a className="footer-status up" href={REPO_URL} target="_blank" rel="noreferrer">
+                                <span className="footer-status-dot" />
+                                Self-hosted · open source
+                            </a>
+                            <span className="footer-sep">·</span>
+                            <span className="footer-meta">rev.0.1.0</span>
+                        </div>
                     </div>
-                </div>
-            </footer>
+                </footer>
+            </div>
         </div>
     );
 }

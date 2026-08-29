@@ -1,7 +1,9 @@
-const BASE = '/api';
+const BASE = '/api/v1';
 
 async function request(path, options = {}) {
-    const res = await fetch(`${BASE}${path}`, {
+    // /health is unversioned (liveness probes shouldn't care about API version)
+    const base = path === '/health' ? '/api' : BASE;
+    const res = await fetch(`${base}${path}`, {
         headers: { 'Content-Type': 'application/json' },
         ...options,
     });

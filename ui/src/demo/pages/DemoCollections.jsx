@@ -1,0 +1,162 @@
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import '../../pages/Collections.css';
+
+const DIM_PRESETS = [
+    { dim: 384, label: '384', desc: 'MiniLM / BGE-small' },
+    { dim: 768, label: '768', desc: 'MPNet / BGE-base' },
+    { dim: 1024, label: '1024', desc: 'BGE-large' },
+    { dim: 1536, label: '1536', desc: 'OpenAI ada-002' },
+    { dim: 3072, label: '3072', desc: 'OpenAI text-3-large' },
+];
+
+const grid = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.05 } },
+};
+
+const cardVariant = {
+    hidden: { opacity: 0, y: 14 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } },
+};
+
+export default function DemoCollections({ addToast, collections, setCollections }) {
+    const [showModal, setShowModal] = useState(false);
+    const [form, setForm] = useState({ name: '', dimension: 384, metric: 'cosine' });
+
+    const handleCreate = (e) => {
+        e.preventDefault();
+        if (collections.some((c) => c.name === form.name)) {
+            addToast(`Collection "${form.name}" already exists`, 'error');
+            return;
+        }
+        setCollections((prev) => [
+            ...prev,
+            { name: form.name, dimension: parseInt(form.dimension), metric: form.metric, count: 0, created_at: new Date().toISOString() },
+        ]);
+        addToast(`Collection "${form.name}" created`, 'success');
+        setShowModal(false);
+        setForm({ name: '', dimension: 384, metric: 'cosine' });
+    };
+
+    const handleDelete = (name) => {
+        if (!confirm(`Delete collection "${name}"? This will remove all its vectors (demo only, resets on reload).`)) return;
+        setCollections((prev) => prev.filter((c) => c.name !== name));
+        addToast(`Collection "${name}" deleted`, 'success');
+    };
+
+    return (
+        <div className="collections-page">
+            <div className="view-header">
+                <h2>Collections</h2>
+                <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                    New Collection
+                </button>
+            </div>
+
+            {collections.length === 0 ? (
+                <div className="empty-state-large">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>
+                    <h3>No collections yet</h3>
+                    <p>Create your first collection to start storing vectors</p>
+                    <button className="btn btn-primary" onClick={() => setShowModal(true)}>Create Collection</button>
+                </div>
+            ) : (
+                <motion.div className="collections-grid" variants={grid} initial="hidden" animate="show">
+                    {collections.map((col) => (
+                        <motion.div key={col.name} className="collection-card" variants={cardVariant} whileHover={{ y: -3 }}>
+                            <div className="collection-card-header">
+                                <h4>{col.name}</h4>
+                                <button className="delete-btn" onClick={() => handleDelete(col.name)} title="Delete collection">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                                </button>
+                            </div>
+                            <div className="collection-meta">
+                                <div className="meta-item">
+                                    <span className="meta-label">Dimension</span>
+                                    <span className="meta-value">{col.dimension}</span>
+                                </div>
+                                <div className="meta-item">
+                                    <span className="meta-label">Metric</span>
+                                    <span className="meta-value badge">{col.metric}</span>
+                                </div>
+                                <div className="meta-item">
+                                    <span className="meta-label">Vectors</span>
+                                    <span className="meta-value">{col.count.toLocaleString()}</span>
+                                </div>
+                                <div className="meta-item">
+                                    <span className="meta-label">Created</span>
+                                    <span className="meta-value time">{new Date(col.created_at).toLocaleDateString()}</span>
+                                </div>
+                            </div>
+                        </motion.div>
+                    ))}
+                </motion.div>
+            )}
+
+            <AnimatePresence>
+                {showModal && (
+                    <motion.div className="modal-overlay" onClick={() => setShowModal(false)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <motion.div
+                            className="modal"
+                            onClick={(e) => e.stopPropagation()}
+                            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                        >
+                            <div className="modal-header">
+                                <h3>Create Collection</h3>
+                                <button className="modal-close" onClick={() => setShowModal(false)}>&times;</button>
+                            </div>
+                            <form onSubmit={handleCreate}>
+                                <div className="modal-body">
+                                    <div className="form-group">
+                                        <label>Name</label>
+                                        <input className="form-input" required placeholder="my-collection"
+                                            value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Dimension</label>
+                                        <div className="dim-presets">
+                                            {DIM_PRESETS.map((p) => (
+                                                <button
+                                                    key={p.dim}
+                                                    type="button"
+                                                    className={`dim-preset-btn ${parseInt(form.dimension) === p.dim ? 'active' : ''}`}
+                                                    onClick={() => setForm({ ...form, dimension: p.dim })}
+                                                    title={p.desc}
+                                                >
+                                                    {p.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <input className="form-input" type="number" required min="1" max="4096"
+                                            value={form.dimension} onChange={(e) => setForm({ ...form, dimension: e.target.value })}
+                                            style={{ marginTop: 8 }} placeholder="Or enter custom dimension" />
+                                        <span className="dim-hint">
+                                            {DIM_PRESETS.find((p) => p.dim === parseInt(form.dimension))?.desc || 'Custom dimension'}
+                                        </span>
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Distance Metric</label>
+                                        <select className="form-select" value={form.metric} onChange={(e) => setForm({ ...form, metric: e.target.value })}>
+                                            <option value="cosine">Cosine</option>
+                                            <option value="euclidean">Euclidean (L2)</option>
+                                            <option value="dot">Dot Product</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
+                                    <button type="submit" className="btn btn-primary">Create</button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}

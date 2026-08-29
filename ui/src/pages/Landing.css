@@ -6,13 +6,17 @@
    the hero's vignette ends on, so there's no hard seam at the fold.
    ═══════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap');
 
 .landing {
-    /* Overrides the global --font-display token (Inter) for this whole
-       subtree — index.css's shared h1–h4 rule picks it up automatically,
-       so every heading on the page, down to card titles, uses it. */
-    --font-display: 'Space Grotesk', var(--font-sans);
+    /* Two typefaces doing two different jobs: Fraunces (a variable serif
+       with a large optical-size axis) carries every heading — index.css's
+       shared h1–h4 rule picks it up automatically — while the existing
+       global --font-mono (JetBrains Mono, already loaded site-wide) is
+       applied directly to labels, eyebrows and the console mock's UI
+       chrome for a technical, "instrument panel" counterpoint. Body copy
+       stays on the global --font-sans (Inter). */
+    --font-display: 'Fraunces', var(--font-sans);
     width: 100%;
     min-height: 100vh;
     background: var(--bg-primary);
@@ -58,8 +62,10 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    font-weight: 600;
-    font-size: 1rem;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
     color: var(--text-primary);
 }
 
@@ -178,10 +184,11 @@
 }
 
 .hero-eyebrow {
-    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
     font-weight: 500;
     color: var(--accent);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     background: rgba(3, 4, 5, 0.35);
     backdrop-filter: blur(8px);
@@ -192,10 +199,11 @@
 }
 
 .hero-content h1 {
-    font-size: 3.4rem;
-    line-height: 1.08;
+    font-size: 3.9rem;
+    line-height: 1.05;
     letter-spacing: -0.02em;
     font-weight: 600;
+    font-variation-settings: 'opsz' 144;
     text-shadow: 0 2px 24px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
@@ -227,6 +235,12 @@
     align-items: center;
     gap: 12px;
     margin-top: 8px;
+}
+
+.hero-actions-hint {
+    margin-top: 14px;
+    font-size: 0.82rem;
+    color: var(--text-tertiary);
 }
 
 .btn-filled-lg,
@@ -291,6 +305,25 @@
     box-shadow: var(--shadow-xl);
     overflow: hidden;
     height: 320px;
+    /* Pure-CSS float, off the JS thread and running on the compositor
+       only (transform, isolated to its own GPU layer) — the previous
+       framer-motion-driven loop shared a thread with scroll-linked
+       motion values and hover springs elsewhere on the page, and that
+       contention is what was dropping frames. */
+    animation: mockConsoleFloat 6s ease-in-out 1.2s infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    contain: layout paint;
+}
+
+@keyframes mockConsoleFloat {
+    0%, 100% {
+        transform: translateZ(0) translateY(0);
+    }
+    50% {
+        transform: translateZ(0) translateY(-8px);
+    }
 }
 
 .mock-sidebar {
@@ -308,7 +341,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.78rem;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
     font-weight: 600;
     color: var(--text-primary);
     padding: 6px 8px 14px;
@@ -319,11 +353,11 @@
     height: 7px;
     border-radius: 50%;
     background: var(--accent);
-    box-shadow: 0 0 6px var(--accent-glow);
 }
 
 .mock-nav-item {
-    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
     color: var(--text-secondary);
     padding: 7px 8px;
     border-radius: var(--radius-sm);
@@ -364,13 +398,17 @@
 }
 
 .mock-metric-value {
+    font-family: var(--font-mono);
     font-size: 1.05rem;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
     color: var(--text-primary);
 }
 
 .mock-metric span:last-child {
-    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.02em;
     color: var(--text-tertiary);
 }
 
@@ -418,17 +456,20 @@
 
 .section-eyebrow {
     display: block;
-    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
     font-weight: 500;
     color: var(--accent);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     margin-bottom: 12px;
 }
 
 .landing-section h2 {
-    font-size: 2rem;
+    font-size: 2.5rem;
+    font-weight: 600;
     letter-spacing: -0.02em;
+    font-variation-settings: 'opsz' 60;
     max-width: 640px;
     margin-bottom: 48px;
 }
@@ -497,7 +538,10 @@
 }
 
 .bento-hero-copy h3 {
-    font-size: 1.4rem;
+    font-size: 1.6rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    font-variation-settings: 'opsz' 40;
     margin-bottom: 10px;
 }
 
@@ -518,7 +562,13 @@
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: 24px;
-    transition: border-color var(--duration) var(--ease);
+    transition: border-color var(--duration) var(--ease), transform var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+}
+
+.feature-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-glow);
 }
 
 .feature-icon {
@@ -541,16 +591,20 @@
 
 .feature-eyebrow {
     display: block;
-    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
     font-weight: 500;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--accent);
     margin-bottom: 6px;
 }
 
 .feature-card h3 {
-    font-size: 1.15rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    font-variation-settings: 'opsz' 28;
     margin-bottom: 8px;
 }
 
@@ -656,8 +710,10 @@
 }
 
 .landing-cta h2 {
-    font-size: 1.9rem;
+    font-size: 2.2rem;
+    font-weight: 600;
     letter-spacing: -0.02em;
+    font-variation-settings: 'opsz' 60;
     max-width: 480px;
 }
 
@@ -714,18 +770,6 @@
 
 .footer-status.up .footer-status-dot {
     background: var(--success);
-    box-shadow: 0 0 6px var(--accent-glow);
-    animation: signalPulse 2s ease-out infinite;
-}
-
-.footer-credit {
-    font-family: var(--font-mono);
-    color: var(--text-tertiary);
-    transition: color var(--duration) var(--ease);
-}
-
-.footer-credit:hover {
-    color: var(--text-secondary);
 }
 
 .footer-meta {
@@ -741,7 +785,7 @@
     }
 
     .hero-content h1 {
-        font-size: 2.2rem;
+        font-size: 2.4rem;
     }
 
     .mock-console {
@@ -787,7 +831,7 @@
     }
 
     .hero-content h1 {
-        font-size: 1.9rem;
+        font-size: 2.05rem;
     }
 
     .hero-actions {
@@ -810,8 +854,40 @@
     }
 }
 
+/* ---- anime.js reveal targets ----
+   Everything from "Built for vector-native apps" down is revealed by
+   anime.js's scroll observer (see Landing.jsx) rather than framer-motion.
+   These start hidden in CSS so there's no flash of fully-visible content
+   between first paint and the effect that wires the animations up. */
+.landing-bottom .section-eyebrow,
+.landing-bottom .landing-section h2,
+.landing-bottom .bento-hero-card,
+.landing-bottom .feature-card,
+.landing-bottom .quick-start-lede,
+.landing-bottom .quick-start-steps li,
+.landing-bottom .code-line,
+.landing-cta,
+.landing-footer .landing-logo,
+.landing-footer .footer-right {
+    opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
-    .shimmer-text {
+    .shimmer-text,
+    .mock-console {
         animation: none;
+    }
+
+    .landing-bottom .section-eyebrow,
+    .landing-bottom .landing-section h2,
+    .landing-bottom .bento-hero-card,
+    .landing-bottom .feature-card,
+    .landing-bottom .quick-start-lede,
+    .landing-bottom .quick-start-steps li,
+    .landing-bottom .code-line,
+    .landing-cta,
+    .landing-footer .landing-logo,
+    .landing-footer .footer-right {
+        opacity: 1;
     }
 }
