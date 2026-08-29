@@ -1,15 +1,26 @@
-"""FastAPI REST API server for NexusDB."""
+"""FastAPI REST API server for NexusDB.
+
+Versioned under /v1 (see `router` below); `/health` stays unversioned since
+it's meant for load balancers / orchestrators to hit without caring about API
+version. Auth (API key) and rate limiting apply to /v1 only.
+"""
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
+from nexusdb.api.config import API_KEY, CORS_ORIGINS, MAX_BODY_SIZE, RATE_LIMIT
 from nexusdb.core.collection import Collection
 from nexusdb.core.vector import Vector
 from nexusdb.persistence.config import AUTO_PERSIST, get_collection_db_path
@@ -25,14 +36,70 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS — allow the Vite dev server & any frontend origin
+
+class MaxBodySizeMiddleware:
+    """Pure-ASGI middleware capping total request body size.
+
+    Counts bytes as they stream in via `receive()` rather than trusting
+    Content-Length, so it also catches chunked-encoding bodies (relevant for
+    /v1/vectors/upsert-batch's streaming NDJSON reads).
+    """
+
+    def __init__(self, app, max_bytes: int) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        total = 0
+
+        async def limited_receive():
+            nonlocal total
+            message = await receive()
+            if message["type"] == "http.request":
+                total += len(message.get("body") or b"")
+                if total > self.max_bytes:
+                    raise HTTPException(status_code=413, detail="Request body too large")
+            return message
+
+        await self.app(scope, limited_receive, send)
+
+
+app.add_middleware(MaxBodySizeMiddleware, max_bytes=MAX_BODY_SIZE)
+
+# CORS — allow-list explicit origins only (default: the Vite dev server).
+# Configure via NEXUSDB_CORS_ORIGINS (comma-separated) for other deployments.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting — a default per-client-IP limit (NEXUSDB_RATE_LIMIT, default
+# 120/minute) applied to every route, no per-endpoint decoration needed.
+limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+
+def require_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> None:
+    """Auth dependency for /v1 routes.
+
+    Demo-grade: a single API key from NEXUSDB_API_KEY checked against the
+    `X-API-Key` header. When the env var is unset (the default), auth is
+    disabled entirely — fine for local dev, not for a real deployment.
+    """
+    if API_KEY is not None and x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Missing or invalid API key")
+
+
+# All versioned endpoints live under /v1 and require the API key (if configured).
+router = APIRouter(prefix="/v1", dependencies=[Depends(require_api_key)])
 
 # In-memory store of collections
 _collections: dict[str, Collection] = {}
@@ -140,14 +207,20 @@ def _auto_persist_delete(collection_name: str, vector_id: str) -> None:
 
 
 class CollectionCreate(BaseModel):
-    name: str
-    dimension: int
-    metric: str = "cosine"
-    index_type: str = Field(default="flat", pattern="^(flat|hnsw)$")
+    name: str = Field(..., description="Unique collection name", examples=["docs"])
+    dimension: int = Field(..., gt=0, description="Fixed vector dimensionality for this collection")
+    metric: str = Field(
+        default="cosine", description="Distance metric: 'cosine', 'euclidean', or 'dot'"
+    )
+    index_type: str = Field(
+        default="flat",
+        pattern="^(flat|hnsw)$",
+        description="'flat' (exact, brute-force) or 'hnsw' (approximate, faster at scale)",
+    )
     # HNSW-only construction params; ignored for index_type='flat'.
-    m: int = Field(default=16, ge=2)
-    ef_construction: int = Field(default=200, ge=1)
-    ef_search: int = Field(default=50, ge=1)
+    m: int = Field(default=16, ge=2, description="HNSW: max connections per node")
+    ef_construction: int = Field(default=200, ge=1, description="HNSW: build-time search width")
+    ef_search: int = Field(default=50, ge=1, description="HNSW: default query-time search width")
 
 
 class CollectionInfo(BaseModel):
@@ -161,9 +234,9 @@ class CollectionInfo(BaseModel):
 
 
 class VectorData(BaseModel):
-    id: str | None = None
-    values: list[float]
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    id: str | None = Field(default=None, description="Vector ID; auto-generated if omitted")
+    values: list[float] = Field(..., description="Embedding, must match the collection's dimension")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Arbitrary JSON metadata")
 
 
 class UpsertRequest(BaseModel):
@@ -177,12 +250,26 @@ class UpsertResponse(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    vector: list[float]
-    k: int = Field(default=10, gt=0)
-    collection: str
+    vector: list[float] = Field(
+        ..., description="Query embedding, must match the collection's dimension"
+    )
+    k: int = Field(default=10, gt=0, description="Number of nearest neighbors to return")
+    collection: str = Field(..., description="Name of the collection to search")
     include_metadata: bool = True
     include_values: bool = False
-    ef_search: int | None = Field(default=None, ge=1)
+    ef_search: int | None = Field(
+        default=None,
+        ge=1,
+        description="HNSW-only: override the collection's default ef_search for this query",
+    )
+    filter: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Exact-match metadata filter applied before the distance computation, "
+            'e.g. {"category": "docs"}. All key/value pairs must match.'
+        ),
+        examples=[{"category": "docs"}],
+    )
 
 
 class SearchMatch(BaseModel):
@@ -293,7 +380,7 @@ class VisualizeResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@app.post("/collections", response_model=CollectionInfo, status_code=201)
+@router.post("/collections", response_model=CollectionInfo, status_code=201, tags=["collections"])
 def create_collection(req: CollectionCreate):
     """Create a new vector collection."""
     if req.name in _collections:
@@ -339,7 +426,7 @@ def create_collection(req: CollectionCreate):
     return CollectionInfo(**col.info())
 
 
-@app.get("/collections", response_model=list[CollectionInfo])
+@router.get("/collections", response_model=list[CollectionInfo], tags=["collections"])
 def list_collections(
     limit: int = Query(default=100, gt=0, le=1000),
     offset: int = Query(default=0, ge=0),
@@ -350,7 +437,7 @@ def list_collections(
     return [CollectionInfo(**_collections[name].info()) for name in page]
 
 
-@app.get("/collections/{name}", response_model=CollectionInfo)
+@router.get("/collections/{name}", response_model=CollectionInfo, tags=["collections"])
 def get_collection(name: str):
     """Get information about a specific collection."""
     if name not in _collections:
@@ -358,7 +445,7 @@ def get_collection(name: str):
     return CollectionInfo(**_collections[name].info())
 
 
-@app.delete("/collections/{name}", status_code=200)
+@router.delete("/collections/{name}", status_code=200, tags=["collections"])
 def delete_collection(name: str):
     """Delete a collection and all its vectors."""
     if name not in _collections:
@@ -390,7 +477,7 @@ def delete_collection(name: str):
 # ---------------------------------------------------------------------------
 
 
-@app.post("/vectors/upsert", response_model=UpsertResponse)
+@router.post("/vectors/upsert", response_model=UpsertResponse, tags=["vectors"])
 def upsert_vectors(req: UpsertRequest):
     """Add or update vectors in a collection."""
     if req.collection not in _collections:
@@ -424,7 +511,67 @@ def upsert_vectors(req: UpsertRequest):
     return UpsertResponse(ids=ids, count=len(ids))
 
 
-@app.post("/vectors/search", response_model=SearchResponse)
+@router.post("/vectors/upsert-batch", response_model=UpsertResponse, tags=["vectors"])
+async def upsert_vectors_batch(
+    request: Request,
+    collection: str = Query(..., description="Target collection name"),
+    batch_size: int = Query(
+        default=500, gt=0, le=10000, description="Vectors per internal add() call"
+    ),
+):
+    """Streaming bulk upsert for large imports.
+
+    Body is newline-delimited JSON (NDJSON) — one vector object per line,
+    e.g. `{"id": "...", "values": [...], "metadata": {...}}`. The request
+    body is read and parsed incrementally and applied in batches of
+    `batch_size`, so importing millions of vectors doesn't require holding
+    one giant JSON document in memory at once.
+    """
+    if collection not in _collections:
+        raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
+    col = _collections[collection]
+
+    all_ids: list[str] = []
+    pending: list[Vector] = []
+    buffer = b""
+
+    def flush() -> None:
+        if not pending:
+            return
+        try:
+            ids = col.add(pending)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        _auto_persist_upsert(collection, list(pending))
+        all_ids.extend(ids)
+        pending.clear()
+
+    def parse_line(line: bytes) -> None:
+        line = line.strip()
+        if not line:
+            return
+        try:
+            obj = json.loads(line)
+            vd = VectorData(**obj)
+            vec = Vector(embedding=vd.values, id=vd.id or None, metadata=vd.metadata)
+        except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as e:
+            raise HTTPException(status_code=400, detail=f"Invalid vector line: {e}") from e
+        pending.append(vec)
+        if len(pending) >= batch_size:
+            flush()
+
+    async for chunk in request.stream():
+        buffer += chunk
+        while b"\n" in buffer:
+            line, buffer = buffer.split(b"\n", 1)
+            parse_line(line)
+    parse_line(buffer)
+    flush()
+
+    return UpsertResponse(ids=all_ids, count=len(all_ids))
+
+
+@router.post("/vectors/search", response_model=SearchResponse, tags=["search"])
 def search_vectors(req: SearchRequest):
     """Search for nearest-neighbor vectors."""
     if req.collection not in _collections:
@@ -439,7 +586,7 @@ def search_vectors(req: SearchRequest):
             f"collection dimension {col.dimension}",
         )
 
-    results = col.search(req.vector, k=req.k, ef_search=req.ef_search)
+    results = col.search(req.vector, k=req.k, ef_search=req.ef_search, filter=req.filter)
 
     matches: list[SearchMatch] = []
     for r in results:
@@ -457,7 +604,7 @@ def search_vectors(req: SearchRequest):
     )
 
 
-@app.get("/vectors/{collection}/{vector_id}", response_model=VectorResponse)
+@router.get("/vectors/{collection}/{vector_id}", response_model=VectorResponse, tags=["vectors"])
 def get_vector(collection: str, vector_id: str):
     """Get a specific vector by ID."""
     if collection not in _collections:
@@ -476,7 +623,7 @@ def get_vector(collection: str, vector_id: str):
     )
 
 
-@app.delete("/vectors/{collection}/{vector_id}", status_code=200)
+@router.delete("/vectors/{collection}/{vector_id}", status_code=200, tags=["vectors"])
 def delete_vector(collection: str, vector_id: str):
     """Delete a vector by ID."""
     if collection not in _collections:
@@ -497,7 +644,9 @@ def delete_vector(collection: str, vector_id: str):
 # ---------------------------------------------------------------------------
 
 
-@app.post("/collections/{name}/save", response_model=SaveCollectionResponse)
+@router.post(
+    "/collections/{name}/save", response_model=SaveCollectionResponse, tags=["persistence"]
+)
 def save_collection(name: str, req: SaveCollectionRequest):
     """Save a collection to disk."""
     if name not in _collections:
@@ -515,7 +664,7 @@ def save_collection(name: str, req: SaveCollectionRequest):
         raise HTTPException(status_code=500, detail=f"Failed to save collection: {e}") from e
 
 
-@app.post("/collections/load", response_model=LoadCollectionResponse)
+@router.post("/collections/load", response_model=LoadCollectionResponse, tags=["persistence"])
 def load_collection(req: LoadCollectionRequest):
     """Load a collection from disk."""
     try:
@@ -557,7 +706,7 @@ def load_collection(req: LoadCollectionRequest):
 # ---------------------------------------------------------------------------
 
 
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health", response_model=HealthResponse, tags=["health"])
 def health_check():
     """System health check."""
     total = sum(col.count for col in _collections.values())
@@ -604,7 +753,7 @@ def _get_embedding_model(model_name: str = "all-MiniLM-L6-v2"):
 # ---------------------------------------------------------------------------
 
 
-@app.post("/embed", response_model=EmbedResponse)
+@router.post("/embed", response_model=EmbedResponse, tags=["embedding"])
 def embed_texts(req: EmbedRequest):
     """Embed a list of texts using a sentence transformer model."""
     if not req.texts:
@@ -622,7 +771,7 @@ def embed_texts(req: EmbedRequest):
     )
 
 
-@app.post("/vectors/embed-upsert", response_model=UpsertResponse)
+@router.post("/vectors/embed-upsert", response_model=UpsertResponse, tags=["embedding"])
 def embed_upsert_vectors(req: EmbedUpsertRequest):
     """Embed texts and upsert the resulting vectors into a collection."""
     if req.collection not in _collections:
@@ -669,7 +818,9 @@ def embed_upsert_vectors(req: EmbedUpsertRequest):
 # ---------------------------------------------------------------------------
 
 
-@app.post("/collections/{name}/visualize", response_model=VisualizeResponse)
+@router.post(
+    "/collections/{name}/visualize", response_model=VisualizeResponse, tags=["visualization"]
+)
 def visualize_collection(name: str, req: VisualizeRequest):
     """Return vectors projected to 3D via PCA with principal components for query projection."""
     if name not in _collections:
@@ -771,3 +922,10 @@ def visualize_collection(name: str, req: VisualizeRequest):
         count=n,
         projection_method=method,
     )
+
+
+# ---------------------------------------------------------------------------
+# Mount versioned router
+# ---------------------------------------------------------------------------
+
+app.include_router(router)

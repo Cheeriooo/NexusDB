@@ -109,6 +109,7 @@ class Collection:
         query: list[float] | np.ndarray,
         k: int = 10,
         ef_search: int | None = None,
+        filter: dict[str, Any] | None = None,
     ) -> list[SearchResult]:
         """Search for nearest neighbors.
 
@@ -117,13 +118,25 @@ class Collection:
             k: Number of neighbors to return.
             ef_search: For an 'hnsw' collection, overrides the index's default
                 speed/recall tradeoff for this query. Ignored for 'flat'.
+            filter: Exact-match metadata filter, e.g. {"category": "docs"}.
+                Only vectors whose metadata matches every key/value pair are
+                considered. Applied before the distance computation.
 
         Returns:
             List of SearchResult ordered by distance (ascending).
         """
         if isinstance(query, (list, tuple)):
             query = np.array(query, dtype=np.float32)
-        return self._index.search(query, k=k, ef_search=ef_search)
+
+        ids_filter = None
+        if filter:
+            ids_filter = {
+                vid
+                for vid, vec in self._index._vectors.items()
+                if all(vec.metadata.get(key) == value for key, value in filter.items())
+            }
+
+        return self._index.search(query, k=k, ids_filter=ids_filter, ef_search=ef_search)
 
     # ------------------------------------------------------------------
     # Info

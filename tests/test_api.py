@@ -14,7 +14,30 @@ def clean_collections():
     _collections.clear()
 
 
-client = TestClient(app)
+class _V1Client:
+    """Thin TestClient wrapper that prefixes /v1 onto every path except /health.
+
+    Keeps the many literal-path call sites below unchanged after the API was
+    versioned under /v1 (health stays unversioned for liveness probes).
+    """
+
+    def __init__(self, app):
+        self._client = TestClient(app)
+
+    def _prefixed(self, path: str) -> str:
+        return path if path.startswith("/health") else f"/v1{path}"
+
+    def get(self, path, **kwargs):
+        return self._client.get(self._prefixed(path), **kwargs)
+
+    def post(self, path, **kwargs):
+        return self._client.post(self._prefixed(path), **kwargs)
+
+    def delete(self, path, **kwargs):
+        return self._client.delete(self._prefixed(path), **kwargs)
+
+
+client = _V1Client(app)
 
 
 # ------------------------------------------------------------------
@@ -337,3 +360,139 @@ class TestSearch:
         # Results should be sorted by distance
         distances = [m["distance"] for m in data["matches"]]
         assert distances == sorted(distances)
+
+    def test_search_with_metadata_filter(self):
+        self._setup_search_collection()
+        r = client.post(
+            "/vectors/search",
+            json={
+                "collection": "search_test",
+                "vector": [1.0, 0.0, 0.0],
+                "k": 3,
+                "filter": {"label": "z"},
+            },
+        )
+        assert r.status_code == 200
+        matches = r.json()["matches"]
+        assert len(matches) == 1
+        assert matches[0]["id"] == "v3"
+
+    def test_search_with_metadata_filter_no_match(self):
+        self._setup_search_collection()
+        r = client.post(
+            "/vectors/search",
+            json={
+                "collection": "search_test",
+                "vector": [1.0, 0.0, 0.0],
+                "k": 3,
+                "filter": {"label": "does-not-exist"},
+            },
+        )
+        assert r.status_code == 200
+        assert r.json()["matches"] == []
+
+
+# ------------------------------------------------------------------
+# Batch (streaming NDJSON) upsert
+# ------------------------------------------------------------------
+
+
+class TestBatchUpsert:
+
+    def _create_collection(self, name="batch", dim=3):
+        client.post("/collections", json={"name": name, "dimension": dim})
+
+    def test_batch_upsert_ndjson(self):
+        self._create_collection()
+        body = (
+            b'{"id": "a", "values": [1.0, 0.0, 0.0]}\n'
+            b'{"id": "b", "values": [0.0, 1.0, 0.0], "metadata": {"k": "v"}}\n'
+        )
+        r = client.post(
+            "/vectors/upsert-batch?collection=batch",
+            content=body,
+            headers={"Content-Type": "application/x-ndjson"},
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["count"] == 2
+        assert set(data["ids"]) == {"a", "b"}
+
+        got = client.get("/vectors/batch/b")
+        assert got.status_code == 200
+        assert got.json()["metadata"] == {"k": "v"}
+
+    def test_batch_upsert_respects_batch_size(self):
+        self._create_collection()
+        lines = b"".join(
+            f'{{"id": "v{i}", "values": [1.0, 0.0, 0.0]}}\n'.encode() for i in range(5)
+        )
+        r = client.post(
+            "/vectors/upsert-batch?collection=batch&batch_size=2",
+            content=lines,
+        )
+        assert r.status_code == 200
+        assert r.json()["count"] == 5
+
+    def test_batch_upsert_missing_collection(self):
+        r = client.post(
+            "/vectors/upsert-batch?collection=nope",
+            content=b'{"id": "a", "values": [1.0]}\n',
+        )
+        assert r.status_code == 404
+
+    def test_batch_upsert_bad_line(self):
+        self._create_collection()
+        r = client.post(
+            "/vectors/upsert-batch?collection=batch",
+            content=b"not json\n",
+        )
+        assert r.status_code == 400
+
+
+# ------------------------------------------------------------------
+# Versioning & health
+# ------------------------------------------------------------------
+
+
+class TestVersioningAndHealth:
+
+    def test_health_is_unversioned(self):
+        r = client._client.get("/health")
+        assert r.status_code == 200
+
+    def test_collections_requires_v1_prefix(self):
+        r = client._client.get("/collections")
+        assert r.status_code == 404
+
+    def test_v1_collections_reachable(self):
+        r = client._client.get("/v1/collections")
+        assert r.status_code == 200
+
+
+# ------------------------------------------------------------------
+# Auth (API key)
+# ------------------------------------------------------------------
+
+
+class TestApiKeyAuth:
+
+    def test_auth_disabled_by_default(self):
+        r = client.get("/collections")
+        assert r.status_code == 200
+
+    def test_auth_enforced_when_key_configured(self, monkeypatch):
+        import nexusdb.api.server as server
+
+        monkeypatch.setattr(server, "API_KEY", "secret123")
+        try:
+            denied = client._client.get("/v1/collections")
+            assert denied.status_code == 401
+
+            allowed = client._client.get("/v1/collections", headers={"X-API-Key": "secret123"})
+            assert allowed.status_code == 200
+
+            health = client._client.get("/health")
+            assert health.status_code == 200
+        finally:
+            monkeypatch.setattr(server, "API_KEY", None)

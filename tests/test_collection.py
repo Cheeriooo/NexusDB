@@ -135,3 +135,27 @@ class TestCollectionSearch:
         col = Collection(name="test", dimension=2)
         results = col.search([1.0, 0.0], k=5)
         assert results == []
+
+    def test_search_with_metadata_filter(self):
+        col = Collection(name="test", dimension=2, metric="cosine")
+        col.add(
+            [
+                Vector(embedding=[1.0, 0.0], id="right", metadata={"tag": "a"}),
+                Vector(embedding=[0.9, 0.1], id="right-ish", metadata={"tag": "b"}),
+                Vector(embedding=[0.0, 1.0], id="up", metadata={"tag": "a"}),
+            ]
+        )
+        results = col.search([1.0, 0.0], k=5, filter={"tag": "a"})
+        assert {r.id for r in results} == {"right", "up"}
+
+    def test_search_with_metadata_filter_no_match(self):
+        col = Collection(name="test", dimension=2)
+        col.add([Vector(embedding=[1.0, 0.0], id="v1", metadata={"tag": "a"})])
+        results = col.search([1.0, 0.0], k=5, filter={"tag": "nope"})
+        assert results == []
+
+    def test_search_without_filter_ignores_metadata(self):
+        col = Collection(name="test", dimension=2)
+        col.add([Vector(embedding=[1.0, 0.0], id="v1", metadata={"tag": "a"})])
+        results = col.search([1.0, 0.0], k=5, filter=None)
+        assert len(results) == 1

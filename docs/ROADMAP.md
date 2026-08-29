@@ -129,15 +129,37 @@ design space, not just one algorithm" signal, but optional.
 **Goal:** the API stops being "just enough for the demo UI" and starts looking
 like something a real client would integrate against.
 
-- [ ] **Metadata filtering** on search: accept a filter expression (`{"field": {"$eq": ...}}`-style, or start simpler with exact-match `dict`) in `SearchRequest`, push it down into `FlatIndex.search`'s existing (currently internal-only) `ids_filter` machinery, and pre-filter before the distance computation where possible for the ANN index too.
-- [ ] **Batch ingestion**: a streaming/chunked upsert endpoint (or documented client-side batching guidance) so importing 1M vectors doesn't mean one giant JSON body.
-- [ ] **API versioning**: introduce an `/v1` prefix now, before there's a second client depending on unversioned paths.
-- [ ] **Auth**: API-key middleware (a header checked against a store — start with a single env-configured key, evolve to per-key records later). Document it clearly as "demo-grade" if you don't go further.
-- [ ] **Lock down CORS** to explicit configured origins via env var, default-deny in anything other than local dev.
-- [ ] **Rate limiting** (e.g., `slowapi`) and a request body size cap.
-- [ ] Polish the OpenAPI schema: descriptions, examples, and response models for every endpoint (some already have this — make it universal).
+- [x] **Metadata filtering** on search: `SearchRequest.filter` (exact-match `dict`) is scanned against each vector's metadata in `Collection.search`, turned into an `ids_filter` set, and pushed down into the existing `ids_filter` machinery in both `FlatIndex.search` and `HNSWIndex.search` — pre-filtered before the distance computation for both index types.
+- [x] **Batch ingestion**: `POST /v1/vectors/upsert-batch?collection=...` reads the request body as newline-delimited JSON (NDJSON) via `Request.stream()`, parsing and upserting in configurable-size batches (`batch_size`, default 500) instead of parsing one giant JSON document into memory.
+- [x] **API versioning**: all endpoints except `/health` moved under an `/v1` prefix (`APIRouter(prefix="/v1")`). `/health` stays unversioned since orchestrators/load balancers hit it without caring about API version.
+- [x] **Auth**: `X-API-Key` header checked against `NEXUSDB_API_KEY` via a FastAPI dependency on the `/v1` router. Unset (default) disables auth for local dev; documented as demo-grade (single shared key, not per-key records) in `.env.example`.
+- [x] **Lock down CORS**: `NEXUSDB_CORS_ORIGINS` (comma-separated, default `http://localhost:5173`) replaces the previous `allow_origins=["*"]`.
+- [x] **Rate limiting** (`slowapi`, `NEXUSDB_RATE_LIMIT`, default `120/minute`, applied globally via `SlowAPIMiddleware`) **and a request body size cap**: `MaxBodySizeMiddleware` counts bytes as they stream through `receive()` (not just `Content-Length`, so it also catches chunked bodies) and returns 413 past `NEXUSDB_MAX_BODY_SIZE` (default 50 MiB).
+- [x] Polish the OpenAPI schema: added `tags` per route group (collections/vectors/search/persistence/embedding/visualization/health) for Swagger grouping, plus `Field(description=...)` on the request models most worth documenting (`CollectionCreate`, `VectorData`, `SearchRequest`).
 
 **Done when:** a stranger reading `/docs` (Swagger) can integrate against the API without asking you a single question, and it survives someone hammering it with `hey`/`wrk` without falling over.
+
+**Status (2026-08-29): implementation done, verified for real, not just unit-tested.**
+- 14 new tests added (`tests/test_api.py`: filtering, batch upsert incl. batch-size
+  and bad-line handling, versioning, auth) plus 3 in `tests/test_collection.py`
+  for the `Collection.search(filter=...)` path — **144/144 passing**, `ruff` and
+  `black --check` clean.
+- Ran the live server (`uvicorn`) and drove every new behavior over real HTTP,
+  not just TestClient: confirmed unversioned `/collections` now 404s while
+  `/v1/collections` works; created a collection, upserted vectors with metadata,
+  and confirmed `filter: {"tag": "x"}` returns only the matching subset;
+  streamed a 2-line NDJSON body through `/v1/vectors/upsert-batch` and got both
+  vectors back; checked CORS headers directly — `Origin: http://localhost:5173`
+  gets `access-control-allow-origin` echoed back, `Origin: http://evil.example`
+  gets no CORS header at all; restarted the server with `NEXUSDB_API_KEY=secret123`
+  set and confirmed no-key and wrong-key requests get 401, the correct key gets
+  200, and `/health` stays reachable with no key regardless.
+- Verified the body-size cap live too: ran with `NEXUSDB_MAX_BODY_SIZE=100`,
+  confirmed a >100-byte request body gets a 413 and a small one still gets
+  a normal 201.
+- Not done, left for a later pass: the OpenAPI polish only covers the
+  highest-traffic models (`CollectionCreate`, `VectorData`, `SearchRequest`)
+  — not literally every field on every response model.
 
 ---
 
