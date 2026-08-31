@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, useMotionValue, useScroll, useSpring, useTransform } from 'framer-motion';
+import { motion, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
 import { animate, createScope, onScroll, stagger } from 'animejs';
 import './Landing.css';
 
 const REPO_URL = 'https://github.com/Cheeriooo/NexusDB';
 
 const FEATURES = [
+    {
+        icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
+        ),
+        eyebrow: 'Explore',
+        title: 'Deep Field visualizer',
+        desc: 'Project a collection into 3D with PCA and fly through the embedding space to see how your data actually clusters.',
+    },
     {
         icon: (
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
@@ -51,40 +59,246 @@ const fadeUp = {
     show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
 };
 
-/* A card that tilts toward the cursor — the hero feature showcase. */
-function TiltCard({ className, children }) {
-    const ref = useRef(null);
-    const rotateX = useSpring(useMotionValue(0), { stiffness: 220, damping: 20 });
-    const rotateY = useSpring(useMotionValue(0), { stiffness: 220, damping: 20 });
+/* A single spine line that draws down a container as it scrolls into
+   view — the throughline connecting a list of rows, without putting any
+   of them in a box. scaleY on a 2px absolutely-positioned bar is enough;
+   no SVG or canvas needed for a straight vertical line. */
+function ScrollSpine({ targetRef, className, offset = ['start 0.8', 'end 0.55'] }) {
+    const shouldReduceMotion = useReducedMotion();
+    const { scrollYProgress } = useScroll({ target: targetRef, offset });
+    const scaleY = useSpring(scrollYProgress, shouldReduceMotion
+        ? { stiffness: 1000, damping: 100 }
+        : { stiffness: 120, damping: 26, restDelta: 0.001 });
+    return <motion.div className={className} style={{ scaleY }} />;
+}
 
-    const onMouseMove = (e) => {
-        const rect = ref.current.getBoundingClientRect();
-        const px = (e.clientX - rect.left) / rect.width - 0.5;
-        const py = (e.clientY - rect.top) / rect.height - 0.5;
-        rotateY.set(px * 8);
-        rotateX.set(py * -8);
-    };
-    const onMouseLeave = () => {
-        rotateX.set(0);
-        rotateY.set(0);
+/* One row of the feature ledger: a number, an icon that pops in once
+   scrolled into view, and copy — no card, no border, no background.
+   Hierarchy comes from type scale and rhythm, not boxes. */
+function FeatureRow({ index, eyebrow, title, desc, icon }) {
+    const shouldReduceMotion = useReducedMotion();
+    return (
+        <motion.div
+            className="feature-row"
+            initial={{ opacity: 0, y: 28 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4 }}
+            transition={{ duration: 0.6, ease: EASE }}
+        >
+            <span className="feature-row-index">{String(index + 1).padStart(2, '0')}</span>
+            <motion.div
+                className="feature-row-icon"
+                initial={{ opacity: 0, scale: 0.6, rotate: -12 }}
+                whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
+                viewport={{ once: true, amount: 0.4 }}
+                transition={shouldReduceMotion ? { duration: 0.3 } : { type: 'spring', stiffness: 200, damping: 16, delay: 0.1 }}
+                whileHover={{ scale: 1.08, rotate: -4 }}
+            >
+                {icon}
+            </motion.div>
+            <div className="feature-row-copy">
+                <span className="feature-eyebrow">{eyebrow}</span>
+                <h3>{title}</h3>
+                <p>{desc}</p>
+            </div>
+        </motion.div>
+    );
+}
+
+/* One line of a terminal, typed out character by character once it
+   becomes the active line, then handing off to the next. Loosely
+   modelled on Magic UI's Terminal/TypingAnimation
+   (magicui.design/docs/components/terminal), simplified to a fixed
+   list of lines: each line owns its own interval and only reports
+   "done" once, via a functional state update guarded on its own index
+   — so there's no shared mutable typing-position state for two lines
+   to race over. */
+function TerminalLine({ index, text, active, done, instant, onDone }) {
+    const [displayed, setDisplayed] = useState(instant ? text : '');
+
+    useEffect(() => {
+        if (instant) {
+            onDone(index);
+            return;
+        }
+        if (!active) return;
+        let i = 0;
+        const id = setInterval(() => {
+            i++;
+            setDisplayed(text.slice(0, i));
+            if (i >= text.length) {
+                clearInterval(id);
+                onDone(index);
+            }
+        }, 30);
+        return () => clearInterval(id);
+        // onDone is stable in behaviour (same index) across renders even
+        // though its identity isn't memoised — re-running this on every
+        // parent render would restart the interval mid-type.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [active, instant, index, text]);
+
+    const shown = instant || done ? text : displayed;
+    const showCursor = !instant && active && shown.length < text.length;
+
+    return (
+        <div className="code-line">
+            <span className="code-prompt">$</span>
+            <code>{shown}</code>
+            {showCursor && <span className="terminal-cursor" />}
+        </div>
+    );
+}
+
+/* A real terminal window instead of a static code block: commands type
+   themselves out once scrolled into view, one line after another, with
+   a blinking cursor — the "up in three commands" claim demonstrated
+   rather than just printed. */
+function TerminalBlock({ steps }) {
+    const shouldReduceMotion = useReducedMotion();
+    const containerRef = useRef(null);
+    // Reduced motion is known synchronously at mount, so it's folded into
+    // this lazy initializer rather than set from inside an effect.
+    const [inView, setInView] = useState(() => !!shouldReduceMotion);
+    const [activeIndex, setActiveIndex] = useState(0);
+
+    useEffect(() => {
+        if (shouldReduceMotion || inView) return;
+        const el = containerRef.current;
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting) {
+                setInView(true);
+                observer.disconnect();
+            }
+        }, { threshold: 0.3 });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [shouldReduceMotion, inView]);
+
+    const handleDone = (index) => {
+        setActiveIndex((current) => (current === index ? index + 1 : current));
     };
 
     return (
-        <motion.div
-            ref={ref}
-            className={className}
-            style={{ rotateX, rotateY, transformPerspective: 900 }}
-            onMouseMove={onMouseMove}
-            onMouseLeave={onMouseLeave}
-            whileHover={{ scale: 1.01 }}
-        >
-            {children}
-        </motion.div>
+        <div className="terminal" ref={containerRef}>
+            <div className="terminal-chrome">
+                <span className="terminal-dot terminal-dot-red" />
+                <span className="terminal-dot terminal-dot-yellow" />
+                <span className="terminal-dot terminal-dot-green" />
+                <span className="terminal-title">nexusdb — zsh</span>
+            </div>
+            <div className="terminal-body">
+                {steps.map((s, i) => (
+                    <TerminalLine
+                        key={s.code}
+                        index={i}
+                        text={s.code}
+                        active={inView && activeIndex === i}
+                        done={activeIndex > i}
+                        instant={shouldReduceMotion}
+                        onDone={handleDone}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+/* An ambient grid of squares that flicker in and out, ported from Magic
+   UI's FlickeringGrid (magicui.design/docs/components/flickering-grid)
+   — a deliberately abstract "live data" texture (no dots-and-lines
+   graph motif) for the CTA band, masked to a soft vignette so it reads
+   as depth behind the copy rather than a hard-edged tile. */
+function FlickeringGrid({ className, squareSize = 4, gridGap = 6, flickerChance = 0.3, maxOpacity = 0.35, color = '34, 211, 164' }) {
+    const canvasRef = useRef(null);
+    const containerRef = useRef(null);
+    const shouldReduceMotion = useReducedMotion();
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        const container = containerRef.current;
+        const ctx = canvas.getContext('2d');
+        let raf = null;
+        let isInView = false;
+        let squares = null;
+        let cols = 0;
+        let rows = 0;
+        let dpr = 1;
+
+        const setup = () => {
+            const rect = container.getBoundingClientRect();
+            dpr = Math.min(window.devicePixelRatio || 1, 2);
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+            cols = Math.ceil(rect.width / (squareSize + gridGap));
+            rows = Math.ceil(rect.height / (squareSize + gridGap));
+            squares = new Float32Array(cols * rows);
+            for (let i = 0; i < squares.length; i++) squares[i] = Math.random() * maxOpacity;
+        };
+
+        const draw = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    ctx.fillStyle = `rgba(${color}, ${squares[i * rows + j]})`;
+                    ctx.fillRect(i * (squareSize + gridGap) * dpr, j * (squareSize + gridGap) * dpr, squareSize * dpr, squareSize * dpr);
+                }
+            }
+        };
+
+        let lastTime = 0;
+        const animate = (time) => {
+            if (!isInView) return;
+            const deltaTime = (time - lastTime) / 1000;
+            lastTime = time;
+            for (let i = 0; i < squares.length; i++) {
+                if (Math.random() < flickerChance * deltaTime) squares[i] = Math.random() * maxOpacity;
+            }
+            draw();
+            raf = requestAnimationFrame(animate);
+        };
+
+        setup();
+        draw();
+        const resizeObserver = new ResizeObserver(() => {
+            setup();
+            draw();
+        });
+        resizeObserver.observe(container);
+
+        let intersectionObserver = null;
+        if (!shouldReduceMotion) {
+            intersectionObserver = new IntersectionObserver(([entry]) => {
+                isInView = entry.isIntersecting;
+                if (isInView) {
+                    lastTime = performance.now();
+                    raf = requestAnimationFrame(animate);
+                } else if (raf) {
+                    cancelAnimationFrame(raf);
+                }
+            }, { threshold: 0 });
+            intersectionObserver.observe(canvas);
+        }
+
+        return () => {
+            if (raf) cancelAnimationFrame(raf);
+            resizeObserver.disconnect();
+            if (intersectionObserver) intersectionObserver.disconnect();
+        };
+    }, [squareSize, gridGap, flickerChance, maxOpacity, color, shouldReduceMotion]);
+
+    return (
+        <div ref={containerRef} className={className} aria-hidden="true">
+            <canvas ref={canvasRef} className="flickering-grid-canvas" />
+        </div>
     );
 }
 
 export default function Landing() {
     const navigate = useNavigate();
+    const shouldReduceMotion = useReducedMotion();
     const [scrolled, setScrolled] = useState(false);
     const { scrollY } = useScroll();
     const heroOpacity = useTransform(scrollY, [0, 420], [1, 0.15]);
@@ -92,6 +306,7 @@ export default function Landing() {
 
     const bottomRef = useRef(null);
     const featuresRef = useRef(null);
+    const featureLedgerRef = useRef(null);
     const quickStartRef = useRef(null);
     const ctaRef = useRef(null);
     const footerRef = useRef(null);
@@ -115,8 +330,15 @@ export default function Landing() {
 
     /* Everything from "Built for vector-native apps" down is revealed
        with anime.js instead of framer-motion — scoped to landing-bottom
-       so it's cleanly torn down (scope.revert()) on unmount. */
+       so it's cleanly torn down (scope.revert()) on unmount. Skipped
+       entirely under reduced motion: anime.js sets each target's opacity
+       to 0 inline as soon as the animation is created (before its
+       onScroll trigger ever fires), and an inline style always beats the
+       stylesheet's reduced-motion override — that CSS escape hatch can
+       never win against anime.js's own inline value, so the only real
+       fix is to not create these animations at all in that case. */
     useEffect(() => {
+        if (shouldReduceMotion) return;
         const scope = createScope({ root: bottomRef }).add(() => {
             const reveal = (targets, opts = {}) => animate(targets, {
                 opacity: [0, 1],
@@ -130,16 +352,10 @@ export default function Landing() {
                 delay: stagger(80),
                 autoplay: onScroll({ target: featuresRef.current }),
             });
-            animate('.bento-hero-card', {
-                opacity: [0, 1],
-                duration: 700,
-                ease: 'outQuad',
-                autoplay: onScroll({ target: featuresRef.current }),
-            });
-            reveal('.feature-card', {
-                delay: stagger(110, { start: 150 }),
-                autoplay: onScroll({ target: featuresRef.current }),
-            });
+            // The feature rows below reveal themselves via Motion's
+            // whileInView (see FeatureRow) rather than this anime.js
+            // scope, since each row's icon pop and copy fade need
+            // per-row viewport tracking that this shared reveal doesn't do.
 
             reveal('#quick-start .section-eyebrow, #quick-start h2, .quick-start-lede', {
                 delay: stagger(80),
@@ -181,7 +397,7 @@ export default function Landing() {
         });
 
         return () => scope.revert();
-    }, []);
+    }, [shouldReduceMotion]);
 
     return (
         <div className="landing">
@@ -308,30 +524,11 @@ export default function Landing() {
                         <span className="section-eyebrow">Built for vector-native apps</span>
                         <h2>Everything you need to ship search that understands meaning.</h2>
 
-                        <div className="bento-grid">
-                            <TiltCard className="bento-hero-card">
-                                <div className="bento-hero-art">
-                                    <div className="bento-hero-glyph">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
-                                    </div>
-                                </div>
-                                <div className="bento-hero-copy">
-                                    <span className="feature-eyebrow">Explore</span>
-                                    <h3>Deep Field visualizer</h3>
-                                    <p>Project a collection into 3D with PCA and fly through the embedding space to see how your data actually clusters.</p>
-                                </div>
-                            </TiltCard>
-
-                            <div className="bento-row">
-                                {FEATURES.map((f) => (
-                                    <div key={f.title} className="feature-card">
-                                        <div className="feature-icon">{f.icon}</div>
-                                        <span className="feature-eyebrow">{f.eyebrow}</span>
-                                        <h3>{f.title}</h3>
-                                        <p>{f.desc}</p>
-                                    </div>
-                                ))}
-                            </div>
+                        <div className="feature-ledger" ref={featureLedgerRef}>
+                            <ScrollSpine targetRef={featureLedgerRef} className="feature-ledger-spine" />
+                            {FEATURES.map((f, i) => (
+                                <FeatureRow key={f.title} index={i} eyebrow={f.eyebrow} title={f.title} desc={f.desc} icon={f.icon} />
+                            ))}
                         </div>
                     </div>
                 </section>
@@ -353,18 +550,12 @@ export default function Landing() {
                                 ))}
                             </ol>
                         </div>
-                        <div className="quick-start-code">
-                            {STEPS.map((s) => (
-                                <div key={s.code} className="code-line">
-                                    <span className="code-prompt">$</span>
-                                    <code>{s.code}</code>
-                                </div>
-                            ))}
-                        </div>
+                        <TerminalBlock steps={STEPS} />
                     </div>
                 </section>
 
                 <section className="landing-cta" ref={ctaRef}>
+                    <FlickeringGrid className="cta-grid" />
                     <div className="section-inner cta-inner">
                         <h2>See your data as a space, not a table.</h2>
                         <motion.button

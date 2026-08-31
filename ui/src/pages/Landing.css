@@ -474,106 +474,59 @@
     margin-bottom: 48px;
 }
 
-/* ---- Feature bento grid ---- */
-.bento-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-.bento-hero-card {
-    display: grid;
-    grid-template-columns: 1.1fr 1fr;
-    align-items: stretch;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
-    will-change: transform;
-}
-
-.bento-hero-card:hover {
-    border-color: var(--border-hover);
-    box-shadow: var(--shadow-glow);
-}
-
-.bento-hero-art {
+/* ---- Feature ledger ----
+   A flowing list, not a grid of cards — hierarchy comes from type
+   scale and a connecting spine, not boxes. */
+.feature-ledger {
     position: relative;
-    min-height: 220px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    background:
-        radial-gradient(ellipse 70% 65% at 50% 45%, var(--accent-dim), transparent 75%),
-        var(--bg-inset);
 }
 
-.bento-hero-glyph {
+/* Runs through the centre of the icon column, threading the rows
+   together like beads on a wire. Draws in on scroll (see ScrollSpine
+   in Landing.jsx) rather than just appearing. */
+.feature-ledger-spine {
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    /* Centred on the 64px icon column: 48px index + 28px gap + 32px
+       (half the icon column) - 1px (half the line's own width). */
+    left: 107px;
+    width: 2px;
+    background: linear-gradient(var(--accent), var(--accent-dim));
+    transform-origin: top;
+    z-index: 0;
+}
+
+.feature-row {
     position: relative;
     z-index: 1;
-    width: 56px;
-    height: 56px;
-    border-radius: var(--radius-md);
-    background: var(--bg-card);
-    border: 1px solid var(--border-hover);
-    box-shadow: var(--shadow-subtle-3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--accent);
-}
-
-.bento-hero-glyph svg {
-    width: 26px;
-    height: 26px;
-}
-
-.bento-hero-copy {
-    padding: 32px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-.bento-hero-copy h3 {
-    font-size: 1.6rem;
-    font-weight: 600;
-    letter-spacing: -0.015em;
-    font-variation-settings: 'opsz' 40;
-    margin-bottom: 10px;
-}
-
-.bento-hero-copy p {
-    font-size: 0.95rem;
-    line-height: 1.6;
-    color: var(--text-secondary);
-}
-
-.bento-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
+    grid-template-columns: 48px 64px 1fr;
+    align-items: start;
+    gap: 28px;
+    padding: 36px 0;
+    border-bottom: 1px solid var(--border-color);
 }
 
-.feature-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 24px;
-    transition: border-color var(--duration) var(--ease), transform var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+.feature-row:first-child {
+    padding-top: 0;
 }
 
-.feature-card:hover {
-    border-color: var(--border-hover);
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-glow);
+.feature-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
 }
 
-.feature-icon {
-    width: 40px;
-    height: 40px;
+.feature-row-index {
+    padding-top: 14px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+}
+
+.feature-row-icon {
+    width: 64px;
+    height: 64px;
     border-radius: var(--radius-md);
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
@@ -581,12 +534,12 @@
     align-items: center;
     justify-content: center;
     color: var(--accent);
-    margin-bottom: 16px;
+    flex-shrink: 0;
 }
 
-.feature-icon svg {
-    width: 20px;
-    height: 20px;
+.feature-row-icon svg {
+    width: 26px;
+    height: 26px;
 }
 
 .feature-eyebrow {
@@ -597,21 +550,26 @@
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--accent);
-    margin-bottom: 6px;
-}
-
-.feature-card h3 {
-    font-size: 1.2rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    font-variation-settings: 'opsz' 28;
     margin-bottom: 8px;
 }
 
-.feature-card p {
-    font-size: 0.9rem;
-    line-height: 1.55;
+.feature-row-copy h3 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    font-variation-settings: 'opsz' 44;
+    margin-bottom: 10px;
+}
+
+.feature-row:first-child .feature-row-copy h3 {
+    font-size: 2rem;
+}
+
+.feature-row-copy p {
+    font-size: 1rem;
+    line-height: 1.65;
     color: var(--text-secondary);
+    max-width: 620px;
 }
 
 /* ---- Quick start ---- */
@@ -661,15 +619,60 @@
     flex-shrink: 0;
 }
 
-.quick-start-code {
+.terminal {
     background: var(--void);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
-    padding: 24px;
+    overflow: hidden;
+    box-shadow: var(--shadow-xl);
+}
+
+.terminal-chrome {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    opacity: 0.65;
+}
+
+.terminal-dot-red { background: #ff5f57; }
+.terminal-dot-yellow { background: #febc2e; }
+.terminal-dot-green { background: #28c840; }
+
+.terminal-title {
+    margin-left: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+}
+
+.terminal-body {
+    padding: 22px 24px;
     display: flex;
     flex-direction: column;
     gap: 12px;
-    box-shadow: var(--shadow-xl);
+    min-height: 108px;
+}
+
+.terminal-cursor {
+    display: inline-block;
+    width: 7px;
+    height: 1.1em;
+    background: var(--accent);
+    animation: terminal-blink 1s step-end infinite;
+}
+
+@keyframes terminal-blink {
+    50% { opacity: 0; }
 }
 
 .code-line {
@@ -696,6 +699,29 @@
         radial-gradient(ellipse 70% 90% at 50% 0%, rgba(34, 211, 164, 0.1), transparent 65%),
         linear-gradient(to bottom, var(--bg-tertiary) 0%, var(--void) 100%);
     color: var(--text-primary);
+    overflow: hidden;
+}
+
+/* Abstract "live data" texture (magicui.design/docs/components/flickering-grid),
+   masked to a soft vignette so it reads as ambient depth behind the
+   copy rather than a hard-edged tile — deliberately not another
+   dots-and-lines graph. */
+.cta-grid {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    mask-image: radial-gradient(ellipse 70% 80% at 50% 40%, #000 0%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 80% at 50% 40%, #000 0%, transparent 75%);
+}
+
+.flickering-grid-canvas {
+    display: block;
+}
+
+/* The CTA's own border-beam host — scoped separately from the shared
+   .btn-filled-lg so the hero's primary button (no beam) is unaffected. */
+.border-beam-host {
+    position: relative;
     overflow: hidden;
 }
 
@@ -801,12 +827,17 @@
         border-bottom: 1px solid var(--border-color);
     }
 
-    .bento-hero-card {
-        grid-template-columns: 1fr;
+    .feature-row {
+        grid-template-columns: 48px 1fr;
+        row-gap: 12px;
     }
 
-    .bento-row {
-        grid-template-columns: 1fr;
+    .feature-row-copy {
+        grid-column: 1 / -1;
+    }
+
+    .feature-ledger-spine {
+        display: none;
     }
 
     .quick-start-grid {
@@ -861,8 +892,6 @@
    between first paint and the effect that wires the animations up. */
 .landing-bottom .section-eyebrow,
 .landing-bottom .landing-section h2,
-.landing-bottom .bento-hero-card,
-.landing-bottom .feature-card,
 .landing-bottom .quick-start-lede,
 .landing-bottom .quick-start-steps li,
 .landing-bottom .code-line,
@@ -874,14 +903,13 @@
 
 @media (prefers-reduced-motion: reduce) {
     .shimmer-text,
-    .mock-console {
+    .mock-console,
+    .terminal-cursor {
         animation: none;
     }
 
     .landing-bottom .section-eyebrow,
     .landing-bottom .landing-section h2,
-    .landing-bottom .bento-hero-card,
-    .landing-bottom .feature-card,
     .landing-bottom .quick-start-lede,
     .landing-bottom .quick-start-steps li,
     .landing-bottom .code-line,
@@ -889,5 +917,11 @@
     .landing-footer .landing-logo,
     .landing-footer .footer-right {
         opacity: 1;
+    }
+
+    .feature-row,
+    .feature-row-icon {
+        opacity: 1 !important;
+        transform: none !important;
     }
 }
