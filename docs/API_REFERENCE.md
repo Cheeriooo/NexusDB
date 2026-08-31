@@ -5,14 +5,18 @@ Base URL in dev: the UI proxies `/api` to the FastAPI server (see
 `/docs` (Swagger) and `/redoc` — treat this file as a map, not the source of
 truth; when in doubt, read `nexusdb/api/server.py` or hit `/docs`.
 
+All endpoints below except `/health*` and `/metrics` are versioned under
+`/v1` (e.g. `POST /v1/collections`) and, if `NEXUSDB_API_KEY` is set, require
+a matching `X-API-Key` header.
+
 ## Collections
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/collections` | Create a collection (`name`, `dimension`, `metric`) |
-| `GET` | `/collections` | List all collections |
-| `GET` | `/collections/{name}` | Get one collection's info |
-| `DELETE` | `/collections/{name}` | Delete a collection and its vectors |
+| `POST` | `/v1/collections` | Create a collection (`name`, `dimension`, `metric`, `index_type: "flat"\|"hnsw"`, HNSW params) |
+| `GET` | `/v1/collections` | List collections, paginated (`limit` default 100/max 1000, `offset`) |
+| `GET` | `/v1/collections/{name}` | Get one collection's info |
+| `DELETE` | `/v1/collections/{name}` | Delete a collection and its vectors |
 
 `metric` is one of `cosine`, `euclidean` (alias `l2`), `dot` (alias `inner_product`).
 
@@ -20,29 +24,34 @@ truth; when in doubt, read `nexusdb/api/server.py` or hit `/docs`.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/vectors/upsert` | Add/update vectors in a collection |
-| `POST` | `/vectors/search` | k-NN search (`vector`, `k`, `collection`, `include_metadata`, `include_values`) |
-| `GET` | `/vectors/{collection}/{vector_id}` | Fetch one vector by ID |
+| `POST` | `/v1/vectors/upsert` | Add/update vectors in a collection |
+| `POST` | `/v1/vectors/upsert-batch?collection=...` | Streaming NDJSON bulk upsert (one vector object per line), for large imports |
+| `POST` | `/v1/vectors/search` | k-NN search (`vector`, `k`, `collection`, `filter`, `ef_search`, `include_metadata`, `include_values`) |
+| `GET` | `/v1/vectors/{collection}/{vector_id}` | Fetch one vector by ID |
+| `DELETE` | `/v1/vectors/{collection}/{vector_id}` | Delete a vector by ID |
 
-`vectors/search` does **not** currently accept a metadata filter — it searches
-the entire collection. See [ROADMAP.md](./ROADMAP.md) Phase 3.
+`search`'s `filter` is an exact-match metadata dict (e.g. `{"category": "docs"}`,
+all key/value pairs must match), applied before the distance computation.
+`ef_search` only affects `hnsw` collections.
 
 ## Persistence (manual)
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/collections/save` (or similar — check `server.py`) | Force-save a collection to a SQLite file |
-| `POST` | `/collections/load` | Load a collection from a SQLite file |
+| `POST` | `/v1/collections/{name}/save` | Force-save a collection to a SQLite file |
+| `POST` | `/v1/collections/load` | Load a collection from a SQLite file |
 
-Auto-persist (save on every write + load on startup) is controlled by the
-`NEXUSDB_AUTO_PERSIST` environment variable, not a request parameter.
+Auto-persist (incremental save on every write + load on startup) is
+controlled by the `NEXUSDB_AUTO_PERSIST` environment variable, not a request
+parameter. `nexusdb backup <collection> <path>` / `nexusdb restore <path>`
+does the same job from the CLI, without the API process running.
 
 ## Embeddings
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/embed` | Embed a list of texts with `sentence-transformers` (default model `all-MiniLM-L6-v2`) |
-| `POST` | `/embed/upsert` | Embed texts and upsert them into a collection in one call |
+| `POST` | `/v1/embed` | Embed a list of texts with `sentence-transformers` (default model `all-MiniLM-L6-v2`) |
+| `POST` | `/v1/vectors/embed-upsert` | Embed texts and upsert them into a collection in one call |
 
 The embedding model loads lazily on first use — first request after a cold
 start will be slow.
@@ -51,21 +60,29 @@ start will be slow.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/collections/{name}/visualize` | PCA-project up to `k` vectors down to 3D for the Three.js viewer |
+| `POST` | `/v1/collections/{name}/visualize` | PCA-project up to `k` vectors down to 3D for the Three.js viewer |
 
-## Health
+## Health & Observability
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/health` | Status, version, collection count, total vector count |
+| `GET` | `/health` | Combined status, version, collection count, total vector count (kept for backwards compatibility) |
+| `GET` | `/health/live` | Liveness — always 200 once the process is serving; use for a container/orchestrator restart trigger |
+| `GET` | `/health/ready` | Readiness — 503 until persisted collections finish loading (only relevant with `NEXUSDB_AUTO_PERSIST=true`); use to gate traffic routing |
+| `GET` | `/metrics` | Prometheus format: request count/latency, `nexusdb_collection_vectors`, `nexusdb_collections_total` |
+
+Every response also carries an `X-Request-ID` header (echoed back if the
+caller sent one, generated otherwise) that ties the response to its
+structured JSON log line server-side.
 
 ## Notable gaps to design around
 
-- No pagination on `GET /collections` or any vector listing endpoint.
-- No auth — every endpoint is open to anyone who can reach the process.
-- No rate limiting or request size caps (a huge `vectors.upsert` payload is
-  accepted as-is).
-- No API versioning prefix (`/v1/...`) — breaking changes currently break
-  every client immediately.
+- No horizontal scalability — a single in-process dict is the source of
+  truth, so this is one process, one machine.
+- Auth is demo-grade: one shared `X-API-Key`, not per-key records or
+  multi-tenancy — any client with the key can read/write any collection.
+- No dependency vulnerability scanning (`pip-audit`/`npm audit`/Dependabot).
+- No live deployed demo yet (deliberately deferred to Phase 6).
 
-These are tracked in [PRODUCTION_READINESS.md](./PRODUCTION_READINESS.md).
+These are tracked in [PRODUCTION_READINESS.md](./PRODUCTION_READINESS.md)
+and [ROADMAP.md](./ROADMAP.md).

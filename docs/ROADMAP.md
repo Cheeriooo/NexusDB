@@ -160,6 +160,11 @@ like something a real client would integrate against.
 - Not done, left for a later pass: the OpenAPI polish only covers the
   highest-traffic models (`CollectionCreate`, `VectorData`, `SearchRequest`)
   — not literally every field on every response model.
+- **Correction added 2026-08-31 (Phase 4):** rate limiting itself was *not*
+  actually verified live in this pass — only auth and body-size were — and
+  it turned out to be a complete no-op on every `/v1` route. Root cause and
+  fix are in the Phase 4 status below; flagging it here too since this
+  section's "done" checkbox was wrong at the time it was checked.
 
 ---
 
@@ -167,13 +172,105 @@ like something a real client would integrate against.
 
 **Goal:** if this were running for real, you'd know when it broke and why.
 
-- [ ] Replace `print()` with structured logging (`structlog` or stdlib `logging` with a JSON formatter) — include request IDs.
-- [ ] Add a `/metrics` endpoint (Prometheus format via `prometheus-fastapi-instrumentator`) covering request latency/count and vector counts per collection.
-- [ ] Wire up basic tracing (OpenTelemetry SDK, even just console-exporter locally) across the search path.
-- [ ] Split `/health` into liveness (process is up) vs. readiness (collections loaded, ready to serve).
-- [ ] Add a simple load test (`locust` or `k6` script) and record baseline p50/p95/p99 latency at a given QPS and dataset size — put this next to the ANN benchmarks.
+- [x] Replace `print()` with structured logging (`structlog` or stdlib `logging` with a JSON formatter) — include request IDs.
+- [x] Add a `/metrics` endpoint (Prometheus format via `prometheus-fastapi-instrumentator`) covering request latency/count and vector counts per collection.
+- [x] Wire up basic tracing (OpenTelemetry SDK, even just console-exporter locally) across the search path.
+- [x] Split `/health` into liveness (process is up) vs. readiness (collections loaded, ready to serve).
+- [x] Add a simple load test (`locust` or `k6` script) and record baseline p50/p95/p99 latency at a given QPS and dataset size — put this next to the ANN benchmarks.
 
 **Done when:** you can answer "how would you know if this went down in prod" with something other than "someone would tell me."
+
+**Status (2026-08-31): done, verified for real.**
+- New `nexusdb/observability/` package: `logging.py` (JSON formatter, a
+  `ContextVar`-backed `request_id` on every log line), `tracing.py`
+  (OpenTelemetry, off by default via `NEXUSDB_TRACING_ENABLED` so a span per
+  request doesn't spam every `pytest`/CI run — see the module docstring for
+  why), `metrics.py` (a `prometheus_client` custom `Collector` that reads
+  `_collections` live at scrape time, so `nexusdb_collection_vectors` and
+  `nexusdb_collections_total` can't go stale from a missed update call).
+- All `print()` calls in `nexusdb/api/server.py` replaced with structured
+  logger calls (the `nexusdb/cli.py` ones are deliberately untouched — CLI
+  user-facing output, not server logs). A new `RequestContextMiddleware`
+  (pure ASGI, not `BaseHTTPMiddleware`, so it doesn't interfere with the
+  existing streaming NDJSON read in `/v1/vectors/upsert-batch`) assigns/echoes
+  an `X-Request-ID` header and logs one structured access-log line per
+  request with status code and duration.
+- `/health/live` (always 200 once the process is serving — an orchestrator
+  restarting the process on this failing would be wrong) and `/health/ready`
+  (503 until persisted collections finish loading, only meaningful when
+  `NEXUSDB_AUTO_PERSIST` is on) added alongside the original `/health`, kept
+  as-is for backwards compatibility.
+- 9 new tests (`TestObservability` in `tests/test_api.py`: liveness, readiness
+  ok/not-ready, request-ID echo/generation, `/metrics` format and content) —
+  **153/153 passing**, `ruff`/`black --check` clean.
+- **Found and fixed a real pre-existing bug while writing these tests, not
+  hunting for one**: `POST /v1/vectors/upsert` and `/v1/vectors/upsert-batch`
+  crashed with a 500 (pydantic `ValidationError` inside `UpsertResponse`) any
+  time a vector was upserted *without* an explicit `id`. Cause: `Vector.id`
+  uses a dataclass `default_factory=uuid4`, but the call sites passed
+  `id=vd.id if vd.id else None` / `id=vd.id or None` — explicitly passing
+  `id=None` overrides a dataclass default_factory instead of triggering it,
+  so `id` stayed `None` all the way to the response model. This is a live
+  correctness bug, not a hypothetical: the id field is documented as
+  "auto-generated if omitted" in `VectorData`'s own `Field(description=...)`,
+  and no existing test exercised the omitted-id path on either endpoint (the
+  one test that omits `id` hits a 404 before reaching vector construction).
+  Fixed at both call sites; added regression tests
+  (`test_upsert_auto_generates_id_when_omitted`,
+  `test_batch_upsert_auto_generates_id_when_omitted`).
+- Ran the live server (`uvicorn`, `NEXUSDB_TRACING_ENABLED=true`) end-to-end,
+  not just through `TestClient`: confirmed `/health/live` and `/health/ready`
+  respond correctly; confirmed a client-supplied `X-Request-ID` is echoed
+  back and an absent one gets a generated one; confirmed the same
+  `request_id` ties together the JSON access-log line and any log lines
+  emitted while handling that request; confirmed `ConsoleSpanExporter` emits
+  real spans (`search_vectors` → `collection.search`) with the collection
+  name, `k`, `index_type`, and result count as span attributes; confirmed
+  `/metrics` exposes both the instrumentator's `http_requests_total` and the
+  custom `nexusdb_collection_vectors{collection="demo",index_type="flat"} 2.0`
+  gauge, correct in real time as vectors were upserted.
+- **Found and fixed a second real pre-existing bug, this one significant**:
+  rate limiting — shipped in Phase 3, "verified live" there — turned out to
+  be a complete no-op on every real API endpoint. Root cause: `SlowAPIMiddleware`
+  resolves the route it's limiting by walking `app.routes` for a literal
+  `APIRoute` match, and treats a failed match as "exempt this request from
+  rate limiting." On the FastAPI/Starlette versions this project pins,
+  `app.include_router()` no longer flattens the included router's routes
+  into `app.routes` (they appear as one opaque entry), so that lookup failed
+  for every `/v1/*` route — i.e. virtually the whole API — and the
+  `120/minute` default silently never applied anywhere it mattered. Found
+  while sanity-checking why the load test below saw zero 429s at ~88 req/s
+  (45x the configured limit) — the right instinct was suspicion, not
+  satisfaction, at a benchmark number that looked "too good." Fixed by
+  replacing `SlowAPIMiddleware` with a small custom `RateLimitMiddleware`
+  (`nexusdb/api/server.py`) that calls slowapi's `sync_check_limits` directly
+  with no route lookup. Verified live: 130 rapid sequential requests at the
+  real default `120/minute` landed exactly 120×`200` then `429` for the
+  rest. Added a regression test (`TestRateLimit`, `tests/test_api.py`) —
+  there was no automated test for rate limiting at all before this, which is
+  exactly how a middleware that looked correctly wired up shipped silently
+  broken. Full root-cause writeup in `docs/BENCHMARKS.md`.
+- **Load test, run for real** against a live single-process server (no auth,
+  `NEXUSDB_AUTO_PERSIST=false`, `NEXUSDB_RATE_LIMIT` deliberately raised —
+  see above for why that's now necessary — one `flat` collection pre-seeded
+  with 10,000 64-dim vectors, 20 concurrent simulated users, 5:1
+  search:upsert mix, 60s, `benchmarks/load_test.py`): **5,853 requests, 0
+  failures, ~99 req/s aggregate, p50 30ms / p95 150ms / p99 220ms** (search:
+  p50 31ms / p95 150ms / p99 220ms; upsert: p50 27ms / p95 130ms / p99
+  200ms). Full numbers and methodology in `docs/BENCHMARKS.md`. Honestly
+  scoped: single process on shared dev hardware, not a tuned production
+  deployment — a real capacity number needs a dedicated host and a bigger
+  `-u`/`-r` sweep, which is future work, not this baseline's job.
+- Docker: `HEALTHCHECK` switched from `/health` to `/health/live` (a
+  container healthcheck should answer "is the process alive," not "are all
+  collections loaded," which is what would make Docker restart a container
+  that's merely still warming up) and `requirements.txt` updated with the
+  three new dependencies (`prometheus-fastapi-instrumentator`,
+  `opentelemetry-api`, `opentelemetry-sdk`). `docker build` itself was
+  **not** re-verified this phase (started, ran long on this machine, and was
+  stopped as an unnecessary check — the endpoint change and new deps are
+  covered by the live server runs and test suite above) — worth a real
+  `docker compose up` pass before Phase 6 bundles the live-demo deploy.
 
 ---
 

@@ -8,23 +8,42 @@ version. Auth (API key) and rate limiting apply to /v1 only.
 from __future__ import annotations
 
 import json
+import time
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import REGISTRY
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field, ValidationError
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
+from slowapi.middleware import sync_check_limits
 from slowapi.util import get_remote_address
+from starlette.datastructures import Headers
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from nexusdb.api.config import API_KEY, CORS_ORIGINS, MAX_BODY_SIZE, RATE_LIMIT
 from nexusdb.core.collection import Collection
 from nexusdb.core.vector import Vector
+from nexusdb.observability.logging import (
+    configure_logging,
+    get_logger,
+    reset_request_id,
+    set_request_id,
+)
+from nexusdb.observability.metrics import CollectionMetricsCollector
+from nexusdb.observability.tracing import configure_tracing, get_tracer
 from nexusdb.persistence.config import AUTO_PERSIST, get_collection_db_path
 from nexusdb.persistence.sqlite_backend import SQLiteBackend
+
+configure_logging()
+configure_tracing()
+logger = get_logger("nexusdb.api")
+tracer = get_tracer("nexusdb.api")
 
 # ---------------------------------------------------------------------------
 # App
@@ -35,6 +54,13 @@ app = FastAPI(
     description="A vector database built from scratch",
     version="0.1.0",
 )
+
+# Readiness gate for /health/ready. True immediately when there's nothing to
+# wait for (the common case — no auto-persist, no collections to load); when
+# NEXUSDB_AUTO_PERSIST is on, starts False and `startup_event` flips it once
+# persisted collections have finished loading, so a load balancer won't route
+# traffic to an instance that's still warming up.
+_ready = not AUTO_PERSIST
 
 
 class MaxBodySizeMiddleware:
@@ -69,6 +95,58 @@ class MaxBodySizeMiddleware:
 
 app.add_middleware(MaxBodySizeMiddleware, max_bytes=MAX_BODY_SIZE)
 
+
+class RequestContextMiddleware:
+    """Pure-ASGI (not `BaseHTTPMiddleware`) so it doesn't interfere with the
+    streaming request body read in `/v1/vectors/upsert-batch`.
+
+    Assigns each request a correlation ID (reused from an incoming
+    `X-Request-ID` header if the caller sent one), echoes it back on the
+    response, stashes it in a ContextVar so every log line emitted while
+    handling the request carries it, and logs one structured access-log
+    line per request with status code and duration.
+    """
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = Headers(scope=scope).get("x-request-id") or uuid.uuid4().hex
+        token = set_request_id(request_id)
+        start = time.perf_counter()
+        status_code = 500
+
+        async def send_wrapper(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+                headers = list(message.get("headers", []))
+                headers.append((b"x-request-id", request_id.encode()))
+                message["headers"] = headers
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            duration_ms = round((time.perf_counter() - start) * 1000, 2)
+            logger.info(
+                "request",
+                extra={
+                    "method": scope.get("method"),
+                    "path": scope.get("path"),
+                    "status_code": status_code,
+                    "duration_ms": duration_ms,
+                },
+            )
+            reset_request_id(token)
+
+
+app.add_middleware(RequestContextMiddleware)
+
 # CORS — allow-list explicit origins only (default: the Vite dev server).
 # Configure via NEXUSDB_CORS_ORIGINS (comma-separated) for other deployments.
 app.add_middleware(
@@ -84,7 +162,46 @@ app.add_middleware(
 limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SlowAPIMiddleware)
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Applies `limiter`'s default_limits to every request.
+
+    Deliberately doesn't use slowapi's own `SlowAPIMiddleware`: that
+    middleware resolves the route handler by walking `app.routes` looking
+    for a literal `APIRoute` match (`slowapi.middleware._find_route_handler`),
+    and treats a failed lookup as "exempt this request from rate limiting"
+    (`_should_exempt`). On the FastAPI/Starlette versions pinned here,
+    `app.include_router()` no longer flattens the included router's routes
+    into `app.routes` — they show up as one opaque entry — so that lookup
+    always failed for every `/v1/*` route (i.e. virtually the entire API),
+    and the "120/minute" default limit silently never applied to a single
+    real endpoint despite `SlowAPIMiddleware` being wired up and the limiter
+    itself working correctly. Calling `sync_check_limits` directly with
+    handler=None sidesteps that route lookup entirely and applies
+    `default_limits` unconditionally, which is what this app actually wants
+    (one global per-client limit, no per-route overrides).
+    """
+
+    async def dispatch(self, request, call_next):
+        error_response, should_inject_headers = sync_check_limits(
+            limiter, request, None, request.app
+        )
+        if error_response is not None:
+            return error_response
+        response = await call_next(request)
+        if should_inject_headers:
+            response = limiter._inject_headers(response, request.state.view_rate_limit)
+        return response
+
+
+app.add_middleware(RateLimitMiddleware)
+
+# Prometheus metrics at GET /metrics: request count/latency (by method, path,
+# status) from the instrumentator, plus nexusdb_collection_vectors and
+# nexusdb_collections_total from CollectionMetricsCollector below (registered
+# once _collections exists, further down this file).
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
 def require_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> None:
@@ -109,6 +226,8 @@ _collections: dict[str, Collection] = {}
 # on every single vector write.
 _backends: dict[str, SQLiteBackend] = {}
 
+REGISTRY.register(CollectionMetricsCollector(_collections))
+
 
 def _get_backend(collection_name: str) -> SQLiteBackend:
     backend = _backends.get(collection_name)
@@ -126,27 +245,33 @@ def _get_backend(collection_name: str) -> SQLiteBackend:
 @app.on_event("startup")
 async def startup_event():
     """Load persisted collections on startup if auto-persist is enabled."""
-    if not AUTO_PERSIST:
-        return
+    global _ready
+    try:
+        if AUTO_PERSIST:
+            from nexusdb.persistence.config import PERSIST_DIR
 
-    from nexusdb.persistence.config import PERSIST_DIR
-
-    # Find all .db files in persist directory
-    if PERSIST_DIR.exists():
-        for db_file in PERSIST_DIR.glob("*.db"):
-            try:
-                col = Collection.load(db_file)
-                if col:
-                    _collections[col.name] = col
-                    _backends[col.name] = SQLiteBackend(db_file)
-                    print(f"[ok] Loaded collection: {col.name} ({col.count} vectors)")
-            except Exception as e:
-                print(f"[warn] Failed to load {db_file}: {e}")
+            if PERSIST_DIR.exists():
+                for db_file in PERSIST_DIR.glob("*.db"):
+                    try:
+                        col = Collection.load(db_file)
+                        if col:
+                            _collections[col.name] = col
+                            _backends[col.name] = SQLiteBackend(db_file)
+                            logger.info(
+                                "loaded collection",
+                                extra={"collection": col.name, "count": col.count},
+                            )
+                    except Exception:
+                        logger.exception("failed to load collection", extra={"file": str(db_file)})
+    finally:
+        _ready = True
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Save all collections on shutdown if auto-persist is enabled."""
+    global _ready
+    _ready = False
     if not AUTO_PERSIST:
         return
 
@@ -154,9 +279,9 @@ async def shutdown_event():
         try:
             db_path = get_collection_db_path(name)
             col.save(db_path)
-            print(f"[ok] Saved collection: {name} to {db_path}")
-        except Exception as e:
-            print(f"[warn] Failed to save {name}: {e}")
+            logger.info("saved collection", extra={"collection": name, "path": str(db_path)})
+        except Exception:
+            logger.exception("failed to save collection", extra={"collection": name})
 
 
 def _auto_persist_upsert(collection_name: str, vectors: list[Vector]) -> None:
@@ -176,8 +301,8 @@ def _auto_persist_upsert(collection_name: str, vectors: list[Vector]) -> None:
             index_params=col.index_params,
         )
         backend.upsert_vectors(vectors)
-    except Exception as e:
-        print(f"[warn] Failed to auto-persist upsert for {collection_name}: {e}")
+    except Exception:
+        logger.exception("auto-persist upsert failed", extra={"collection": collection_name})
 
 
 def _auto_persist_delete(collection_name: str, vector_id: str) -> None:
@@ -197,8 +322,8 @@ def _auto_persist_delete(collection_name: str, vector_id: str) -> None:
             index_type=col.index_type,
             index_params=col.index_params,
         )
-    except Exception as e:
-        print(f"[warn] Failed to auto-persist delete for {collection_name}: {e}")
+    except Exception:
+        logger.exception("auto-persist delete failed", extra={"collection": collection_name})
 
 
 # ---------------------------------------------------------------------------
@@ -420,8 +545,8 @@ def create_collection(req: CollectionCreate):
                 index_type=col.index_type,
                 index_params=col.index_params,
             )
-        except Exception as e:
-            print(f"[warn] Failed to auto-save collection {req.name}: {e}")
+        except Exception:
+            logger.exception("auto-save collection failed", extra={"collection": req.name})
 
     return CollectionInfo(**col.info())
 
@@ -466,8 +591,8 @@ def delete_collection(name: str):
                 sidecar = db_path.with_name(db_path.name + suffix)
                 if sidecar.exists():
                     os.remove(sidecar)
-        except Exception as e:
-            print(f"[warn] Failed to delete persisted data for {name}: {e}")
+        except Exception:
+            logger.exception("failed to delete persisted data", extra={"collection": name})
 
     return {"message": f"Collection '{name}' deleted"}
 
@@ -488,12 +613,10 @@ def upsert_vectors(req: UpsertRequest):
     vectors: list[Vector] = []
     for vd in req.vectors:
         try:
-            vec = Vector(
-                embedding=vd.values,
-                id=vd.id if vd.id else None,
-                metadata=vd.metadata,
-            )
-            # Let Vector auto-generate ID if None
+            # Vector's `id` uses a default_factory (uuid4) — explicitly
+            # passing id=None to the constructor would override that
+            # default and leave id=None, so only set it when provided.
+            vec = Vector(embedding=vd.values, metadata=vd.metadata)
             if vd.id:
                 vec.id = vd.id
             vectors.append(vec)
@@ -553,7 +676,10 @@ async def upsert_vectors_batch(
         try:
             obj = json.loads(line)
             vd = VectorData(**obj)
-            vec = Vector(embedding=vd.values, id=vd.id or None, metadata=vd.metadata)
+            # See the same fix (and reasoning) in upsert_vectors above.
+            vec = Vector(embedding=vd.values, metadata=vd.metadata)
+            if vd.id:
+                vec.id = vd.id
         except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as e:
             raise HTTPException(status_code=400, detail=f"Invalid vector line: {e}") from e
         pending.append(vec)
@@ -574,34 +700,42 @@ async def upsert_vectors_batch(
 @router.post("/vectors/search", response_model=SearchResponse, tags=["search"])
 def search_vectors(req: SearchRequest):
     """Search for nearest-neighbor vectors."""
-    if req.collection not in _collections:
-        raise HTTPException(status_code=404, detail=f"Collection '{req.collection}' not found")
+    with tracer.start_as_current_span("search_vectors") as span:
+        span.set_attribute("nexusdb.collection", req.collection)
+        span.set_attribute("nexusdb.k", req.k)
+        span.set_attribute("nexusdb.filter_applied", req.filter is not None)
 
-    col = _collections[req.collection]
+        if req.collection not in _collections:
+            raise HTTPException(status_code=404, detail=f"Collection '{req.collection}' not found")
 
-    if len(req.vector) != col.dimension:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Query dimension {len(req.vector)} doesn't match "
-            f"collection dimension {col.dimension}",
+        col = _collections[req.collection]
+        span.set_attribute("nexusdb.index_type", col.index_type)
+
+        if len(req.vector) != col.dimension:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Query dimension {len(req.vector)} doesn't match "
+                f"collection dimension {col.dimension}",
+            )
+
+        with tracer.start_as_current_span("collection.search") as search_span:
+            results = col.search(req.vector, k=req.k, ef_search=req.ef_search, filter=req.filter)
+            search_span.set_attribute("nexusdb.results", len(results))
+
+        matches: list[SearchMatch] = []
+        for r in results:
+            match = SearchMatch(id=r.id, distance=r.distance)
+            if req.include_metadata and r.vector:
+                match.metadata = r.vector.metadata
+            if req.include_values and r.vector:
+                match.values = r.vector.embedding.tolist()
+            matches.append(match)
+
+        return SearchResponse(
+            matches=matches,
+            collection=req.collection,
+            query_dimension=len(req.vector),
         )
-
-    results = col.search(req.vector, k=req.k, ef_search=req.ef_search, filter=req.filter)
-
-    matches: list[SearchMatch] = []
-    for r in results:
-        match = SearchMatch(id=r.id, distance=r.distance)
-        if req.include_metadata and r.vector:
-            match.metadata = r.vector.metadata
-        if req.include_values and r.vector:
-            match.values = r.vector.embedding.tolist()
-        matches.append(match)
-
-    return SearchResponse(
-        matches=matches,
-        collection=req.collection,
-        query_dimension=len(req.vector),
-    )
 
 
 @router.get("/vectors/{collection}/{vector_id}", response_model=VectorResponse, tags=["vectors"])
@@ -708,7 +842,13 @@ def load_collection(req: LoadCollectionRequest):
 
 @app.get("/health", response_model=HealthResponse, tags=["health"])
 def health_check():
-    """System health check."""
+    """Combined health check (status + collection/vector counts).
+
+    Kept for backwards compatibility with existing callers/dashboards; new
+    integrations — especially orchestrator probes — should use
+    `/health/live` and `/health/ready` instead, which carry distinct
+    liveness/readiness semantics (see below).
+    """
     total = sum(col.count for col in _collections.values())
     return HealthResponse(
         status="ok",
@@ -717,6 +857,35 @@ def health_check():
         total_vectors=total,
         timestamp=datetime.now(UTC).isoformat(),
     )
+
+
+@app.get("/health/live", tags=["health"])
+def liveness_check():
+    """Liveness probe: is the process up and able to handle a request at all.
+
+    Always 200 once the ASGI app is serving traffic — deliberately doesn't
+    check collection state, so an orchestrator won't kill/restart an instance
+    that's merely still loading persisted collections (that's readiness).
+    """
+    return {"status": "alive"}
+
+
+@app.get("/health/ready", tags=["health"])
+def readiness_check():
+    """Readiness probe: is this instance ready to actually serve requests.
+
+    False until `startup_event` finishes loading persisted collections (only
+    relevant when NEXUSDB_AUTO_PERSIST is on — otherwise there's nothing to
+    wait for and this is true immediately). An orchestrator should stop
+    routing traffic here on a 503, but not restart the process for it.
+    """
+    if not _ready:
+        raise HTTPException(status_code=503, detail="not ready")
+    return {
+        "status": "ready",
+        "collections": len(_collections),
+        "total_vectors": sum(col.count for col in _collections.values()),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -733,10 +902,10 @@ def _get_embedding_model(model_name: str = "all-MiniLM-L6-v2"):
         try:
             from sentence_transformers import SentenceTransformer
 
-            print(f"[info] Loading embedding model '{model_name}'...")
+            logger.info("loading embedding model", extra={"model": model_name})
             _embedding_model = SentenceTransformer(model_name)
             _embedding_model_name = model_name
-            print(f"[ok] Embedding model '{model_name}' loaded.")
+            logger.info("embedding model loaded", extra={"model": model_name})
         except ImportError as e:
             raise HTTPException(
                 status_code=501,

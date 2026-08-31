@@ -192,6 +192,20 @@ class TestVectors:
         assert data["count"] == 2
         assert "v1" in data["ids"]
 
+    def test_upsert_auto_generates_id_when_omitted(self):
+        """Regression: explicitly passing id=None to Vector's constructor used
+        to override its default_factory (uuid4), leaving id=None and crashing
+        UpsertResponse's pydantic validation with a 500 instead of a UUID."""
+        self._create_collection()
+        r = client.post(
+            "/vectors/upsert",
+            json={"collection": "test", "vectors": [{"values": [1.0, 0.0, 0.0, 0.0]}]},
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["count"] == 1
+        assert data["ids"][0]
+
     def test_upsert_missing_collection(self):
         r = client.post(
             "/vectors/upsert",
@@ -422,6 +436,20 @@ class TestBatchUpsert:
         assert got.status_code == 200
         assert got.json()["metadata"] == {"k": "v"}
 
+    def test_batch_upsert_auto_generates_id_when_omitted(self):
+        """Same regression as test_upsert_auto_generates_id_when_omitted, for
+        the streaming NDJSON batch path."""
+        self._create_collection()
+        r = client.post(
+            "/vectors/upsert-batch?collection=batch",
+            content=b'{"values": [1.0, 0.0, 0.0]}\n',
+            headers={"Content-Type": "application/x-ndjson"},
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["count"] == 1
+        assert data["ids"][0]
+
     def test_batch_upsert_respects_batch_size(self):
         self._create_collection()
         lines = b"".join(
@@ -475,6 +503,37 @@ class TestVersioningAndHealth:
 # ------------------------------------------------------------------
 
 
+class TestRateLimit:
+
+    def test_default_limit_is_enforced_on_v1_routes(self, monkeypatch):
+        """Regression: SlowAPIMiddleware's own route-handler lookup
+        (`_find_route_handler` walking `app.routes`) doesn't find routes
+        mounted via `app.include_router()` on this FastAPI/Starlette version
+        — they show up as one opaque entry rather than being flattened — so
+        it always treated every /v1 route as "exempt" and the configured
+        rate limit silently never applied. `RateLimitMiddleware` (server.py)
+        replaces it by calling `sync_check_limits` directly. Uses a tight
+        limit here (swapped into the already-constructed limiter, since
+        NEXUSDB_RATE_LIMIT is only read once at import time) so the test
+        doesn't need 120+ requests."""
+        from slowapi.wrappers import LimitGroup
+
+        import nexusdb.api.server as server
+
+        original_limits = server.limiter._default_limits
+        tight_limit = LimitGroup(
+            "3/minute", server.limiter._key_func, None, False, None, None, None, 1, False
+        )
+        monkeypatch.setattr(server.limiter, "_default_limits", [tight_limit])
+        try:
+            codes = [client._client.get("/v1/collections").status_code for _ in range(6)]
+            assert codes.count(200) == 3
+            assert codes.count(429) == 3
+        finally:
+            server.limiter.reset()
+            monkeypatch.setattr(server.limiter, "_default_limits", original_limits)
+
+
 class TestApiKeyAuth:
 
     def test_auth_disabled_by_default(self):
@@ -496,3 +555,54 @@ class TestApiKeyAuth:
             assert health.status_code == 200
         finally:
             monkeypatch.setattr(server, "API_KEY", None)
+
+
+# ------------------------------------------------------------------
+# Observability: liveness/readiness, request IDs, metrics
+# ------------------------------------------------------------------
+
+
+class TestObservability:
+
+    def test_liveness_always_ok(self):
+        r = client._client.get("/health/live")
+        assert r.status_code == 200
+        assert r.json()["status"] == "alive"
+
+    def test_readiness_ok_when_ready(self):
+        r = client._client.get("/health/ready")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "ready"
+        assert "collections" in data
+        assert "total_vectors" in data
+
+    def test_readiness_503_when_not_ready(self, monkeypatch):
+        import nexusdb.api.server as server
+
+        monkeypatch.setattr(server, "_ready", False)
+        r = client._client.get("/health/ready")
+        assert r.status_code == 503
+
+    def test_response_echoes_request_id_header(self):
+        r = client._client.get("/health", headers={"X-Request-ID": "test-req-123"})
+        assert r.headers["x-request-id"] == "test-req-123"
+
+    def test_response_generates_request_id_when_absent(self):
+        r = client._client.get("/health")
+        assert "x-request-id" in r.headers
+        assert len(r.headers["x-request-id"]) > 0
+
+    def test_metrics_endpoint_exposes_prometheus_format(self):
+        r = client._client.get("/metrics")
+        assert r.status_code == 200
+        assert "text/plain" in r.headers["content-type"]
+
+    def test_metrics_reflects_collection_vector_counts(self):
+        client.post("/collections", json={"name": "m", "dimension": 2})
+        client.post(
+            "/vectors/upsert",
+            json={"collection": "m", "vectors": [{"values": [1.0, 0.0]}]},
+        )
+        r = client._client.get("/metrics")
+        assert 'nexusdb_collection_vectors{collection="m",index_type="flat"} 1.0' in r.text
