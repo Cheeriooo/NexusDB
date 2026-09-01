@@ -1,0 +1,155 @@
+.tour-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    pointer-events: none;
+}
+
+.tour-spotlight {
+    position: fixed;
+    border-radius: 12px;
+    box-shadow: 0 0 0 2000px rgba(3, 4, 5, 0.72), 0 0 0 1px var(--accent-line), 0 0 24px -2px var(--accent-glow);
+    pointer-events: none;
+}
+
+.tour-tooltip {
+    position: fixed;
+    width: 336px;
+    max-width: calc(100vw - 32px);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    padding: 18px 20px;
+    pointer-events: auto;
+}
+
+.tour-tooltip-center {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.tour-progress {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 12px;
+}
+
+.tour-dot {
+    width: 16px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--border-hover);
+    transition: background 0.2s ease;
+}
+
+.tour-dot.done {
+    background: var(--accent-dim);
+}
+
+.tour-dot.active {
+    background: var(--accent);
+}
+
+.tour-tooltip h4 {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    margin: 0 0 6px;
+}
+
+.tour-tooltip p {
+    font-size: 0.83rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0 0 16px;
+}
+
+.tour-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.tour-actions-nav {
+    display: flex;
+    gap: 8px;
+}
+
+.tour-trigger-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.tour-trigger-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.tour-welcome-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 950;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(3, 4, 5, 0.72);
+    backdrop-filter: blur(4px);
+    padding: 20px;
+}
+
+.tour-welcome-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    padding: 28px;
+    text-align: center;
+}
+
+.tour-welcome-icon {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: var(--accent-dim);
+    color: var(--accent);
+}
+
+.tour-welcome-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.tour-welcome-card h3 {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    margin: 0 0 8px;
+}
+
+.tour-welcome-card p {
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    margin: 0 0 22px;
+}
+
+.tour-welcome-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+@media (max-width: 640px) {
+    .tour-tooltip {
+        width: calc(100vw - 32px);
+    }
+}

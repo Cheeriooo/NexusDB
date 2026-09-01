@@ -66,6 +66,12 @@
     background: rgba(34, 211, 164, 0.08);
 }
 
+.demo-main-content .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .demo-suggested-queries {
     display: flex;
     flex-wrap: wrap;

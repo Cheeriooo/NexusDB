@@ -66,6 +66,7 @@ export default function DemoDashboard({ navigate, collections }) {
                     </div>
                     <div className="card-body">
                         <ActionButton
+                            dataTour="action-new-collection"
                             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>}
                             title="New Collection"
                             desc="Create a vector collection"
@@ -111,9 +112,9 @@ function MetricCard({ icon, value, label, accent, live }) {
     );
 }
 
-function ActionButton({ icon, title, desc, onClick }) {
+function ActionButton({ icon, title, desc, onClick, dataTour }) {
     return (
-        <motion.button className="action-btn" onClick={onClick} whileHover={{ x: 4 }} whileTap={{ scale: 0.98 }}>
+        <motion.button className="action-btn" data-tour={dataTour} onClick={onClick} whileHover={{ x: 4 }} whileTap={{ scale: 0.98 }}>
             {icon}
             <div>
                 <strong>{title}</strong>

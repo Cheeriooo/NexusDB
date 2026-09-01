@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Toast from '../components/Toast';
@@ -7,6 +7,8 @@ import DemoCollections from './pages/DemoCollections';
 import DemoVectors from './pages/DemoVectors';
 import DemoSearch from './pages/DemoSearch';
 import DemoVisualizer from './pages/DemoVisualizer';
+import DemoTour from './DemoTour';
+import { TOUR_SEEN_KEY } from './tourSteps';
 import { DEMO_COLLECTIONS_INIT } from './demoData';
 import '../App.css';
 import '../components/Sidebar.css';
@@ -37,11 +39,35 @@ export default function DemoConsole() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [toasts, setToasts] = useState([]);
     const [collections, setCollections] = useState(DEMO_COLLECTIONS_INIT);
+    const [tourActive, setTourActive] = useState(false);
+    const [tourKey, setTourKey] = useState(0);
+    const [showWelcome, setShowWelcome] = useState(false);
+
+    useEffect(() => {
+        let seen = true;
+        try { seen = localStorage.getItem(TOUR_SEEN_KEY) === '1'; } catch { /* storage unavailable */ }
+        if (!seen) {
+            const t = setTimeout(() => setShowWelcome(true), 500);
+            return () => clearTimeout(t);
+        }
+        return undefined;
+    }, []);
 
     const addToast = (message, type = 'info') => {
         const id = Date.now() + Math.random();
         setToasts((prev) => [...prev, { id, message, type }]);
         setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+    };
+
+    const startTour = () => {
+        setShowWelcome(false);
+        setTourKey((k) => k + 1);
+        setTourActive(true);
+    };
+
+    const dismissWelcome = () => {
+        try { localStorage.setItem(TOUR_SEEN_KEY, '1'); } catch { /* storage unavailable */ }
+        setShowWelcome(false);
     };
 
     const switchView = (view) => {
@@ -121,6 +147,10 @@ export default function DemoConsole() {
                         {active.title}
                     </motion.h1>
                     <div className="topbar-actions">
+                        <button className="btn btn-ghost btn-sm tour-trigger-btn" onClick={startTour}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M9.5 9.5a2.5 2.5 0 115 .5c0 1.5-2.5 2-2.5 3.5" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                            Guide me
+                        </button>
                         <span className="topbar-badge">NEXUSDB · DEMO</span>
                     </div>
                 </header>
@@ -143,6 +173,35 @@ export default function DemoConsole() {
                 </AnimatePresence>
             </main>
             <Toast toasts={toasts} />
+
+            <AnimatePresence>
+                {showWelcome && (
+                    <motion.div className="tour-welcome-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <motion.div
+                            className="tour-welcome-card"
+                            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                        >
+                            <div className="tour-welcome-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M9.5 9.5a2.5 2.5 0 115 .5c0 1.5-2.5 2-2.5 3.5" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                            </div>
+                            <h3>New to NexusDB?</h3>
+                            <p>
+                                Take a 90-second guided tour of the core workflow — create a collection,
+                                insert vectors, search, and visualize — with prompts at every step.
+                            </p>
+                            <div className="tour-welcome-actions">
+                                <button className="btn btn-primary" onClick={startTour}>Start guided tour</button>
+                                <button className="btn btn-ghost" onClick={dismissWelcome}>Skip, I'll explore myself</button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <DemoTour key={tourKey} active={tourActive} activeView={activeView} switchView={switchView} onFinish={() => setTourActive(false)} />
         </>
     );
 }
