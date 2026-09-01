@@ -38,6 +38,9 @@ benchmark = [
 loadtest = [
     "locust>=2.20.0",
 ]
+embedding = [
+    "sentence-transformers>=2.2.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -54,7 +54,9 @@ does the same job from the CLI, without the API process running.
 | `POST` | `/v1/vectors/embed-upsert` | Embed texts and upsert them into a collection in one call |
 
 The embedding model loads lazily on first use — first request after a cold
-start will be slow.
+start will be slow. Requires the optional `sentence-transformers` dependency
+(not installed by `pip install -e ".[dev]"` alone — see
+[`docs/SETUP.md`](./SETUP.md)); without it these return `501`.
 
 ## Visualization
 
