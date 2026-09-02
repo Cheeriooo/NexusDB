@@ -41,6 +41,12 @@ all key/value pairs must match), applied before the distance computation.
 | `POST` | `/v1/collections/{name}/save` | Force-save a collection to a SQLite file |
 | `POST` | `/v1/collections/load` | Load a collection from a SQLite file |
 
+`filepath` on both endpoints is a bare filename (no `/`, `\`, or `..`) resolved
+against `NEXUSDB_PERSIST_DIR` on the server — not an arbitrary filesystem
+path, so a remote client can't read or write files outside that directory.
+For an arbitrary source/destination path, use the CLI below, which runs
+locally with whatever filesystem access you already have.
+
 Auto-persist (incremental save on every write + load on startup) is
 controlled by the `NEXUSDB_AUTO_PERSIST` environment variable, not a request
 parameter. `nexusdb backup <collection> <path>` / `nexusdb restore <path>`

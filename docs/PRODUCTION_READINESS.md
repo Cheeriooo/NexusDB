@@ -22,13 +22,16 @@ Legend: ✅ done · 🟡 partial · ❌ missing
 
 | Item | Status | Notes |
 |---|---|---|
-| Authentication | 🟡 | `X-API-Key` against `NEXUSDB_API_KEY` on all `/v1` routes (Phase 3); demo-grade — one shared key, not per-key records, off unless the env var is set |
+| Authentication | 🟡 | `X-API-Key` against `NEXUSDB_API_KEY` on all `/v1` routes (Phase 3); demo-grade — one shared key, not per-key records, off unless the env var is set. Comparison uses `secrets.compare_digest` (constant-time) |
 | Authorization / multi-tenancy | ❌ | Any client with the (single, shared) API key can read/write any collection |
 | CORS locked to known origins | ✅ | `NEXUSDB_CORS_ORIGINS` allow-list (default: the Vite dev server only), replaces the old `allow_origins=["*"]` (Phase 3) |
+| Path traversal on save/load | ✅ | `POST /v1/collections/{name}/save` and `/v1/collections/load` took an arbitrary `filepath` from the client with no validation — a remote caller could write or read any file the server process had access to. Both now resolve `filepath` as a bare filename confined to `NEXUSDB_PERSIST_DIR`, rejecting absolute paths, path separators, and `..`; covered by `TestPersistencePathSafety` in `tests/test_api.py` |
+| Collection name validation | ✅ | `name` on `POST /v1/collections` is now restricted to `[A-Za-z0-9_-]+` — closes the same traversal angle via auto-persist filenames (`PERSIST_DIR/{name}.db`) |
 | Secrets management | 🟡 | `.env.example` documents every secret-shaped var (`NEXUSDB_API_KEY`); no vault/rotation story, fine for this project's scale |
 | Dependency vulnerability scanning | ❌ | No `pip-audit` / `npm audit` / Dependabot config |
 | Rate limiting / abuse protection | ✅ | `NEXUSDB_RATE_LIMIT` (default `120/minute` per client IP) — **shipped broken in Phase 3** (a complete no-op on every `/v1` route due to a `slowapi`/FastAPI routing incompatibility — see `docs/BENCHMARKS.md`) and **fixed in Phase 4** with a custom `RateLimitMiddleware`, verified live (120 allowed then 429s) and covered by a regression test that didn't exist before |
 | Input size limits (payload/body caps) | ✅ | `NEXUSDB_MAX_BODY_SIZE` (default 50 MiB), enforced by streaming byte count (catches chunked bodies too), verified live with a 413 |
+| Container runs as non-root | ✅ | API `Dockerfile` creates and switches to an unprivileged `nexusdb` user |
 
 ## Reliability & Scaling
 
@@ -77,7 +80,7 @@ Legend: ✅ done · 🟡 partial · ❌ missing
 
 | Item | Status | Notes |
 |---|---|---|
-| README with problem statement, architecture, demo link | 🟡 | Still needs the Phase 7 rewrite (architecture diagram, GIF, benchmark numbers, demo link) |
+| README with problem statement, architecture, demo link | ✅ | Rewritten with problem statement, architecture summary, feature list, and links into `docs/` |
 | LICENSE file | ✅ | MIT `LICENSE` present, matches `pyproject.toml` |
 | CONTRIBUTING.md | ❌ | None |
 | Architecture docs | ✅ | `docs/ARCHITECTURE.md` (this doc set) |

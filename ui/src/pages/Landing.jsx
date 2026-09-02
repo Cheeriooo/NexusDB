@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
 import { animate, createScope, onScroll, stagger } from 'animejs';
+import AeroShards from '../components/AeroShards';
 import './Landing.css';
 
 const REPO_URL = 'https://github.com/Cheeriooo/NexusDB';
@@ -204,98 +205,6 @@ function TerminalBlock({ steps }) {
     );
 }
 
-/* An ambient grid of squares that flicker in and out, ported from Magic
-   UI's FlickeringGrid (magicui.design/docs/components/flickering-grid)
-   — a deliberately abstract "live data" texture (no dots-and-lines
-   graph motif) for the CTA band, masked to a soft vignette so it reads
-   as depth behind the copy rather than a hard-edged tile. */
-function FlickeringGrid({ className, squareSize = 4, gridGap = 6, flickerChance = 0.3, maxOpacity = 0.35, color = '34, 211, 164' }) {
-    const canvasRef = useRef(null);
-    const containerRef = useRef(null);
-    const shouldReduceMotion = useReducedMotion();
-
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        const container = containerRef.current;
-        const ctx = canvas.getContext('2d');
-        let raf = null;
-        let isInView = false;
-        let squares = null;
-        let cols = 0;
-        let rows = 0;
-        let dpr = 1;
-
-        const setup = () => {
-            const rect = container.getBoundingClientRect();
-            dpr = Math.min(window.devicePixelRatio || 1, 2);
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            canvas.style.width = `${rect.width}px`;
-            canvas.style.height = `${rect.height}px`;
-            cols = Math.ceil(rect.width / (squareSize + gridGap));
-            rows = Math.ceil(rect.height / (squareSize + gridGap));
-            squares = new Float32Array(cols * rows);
-            for (let i = 0; i < squares.length; i++) squares[i] = Math.random() * maxOpacity;
-        };
-
-        const draw = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            for (let i = 0; i < cols; i++) {
-                for (let j = 0; j < rows; j++) {
-                    ctx.fillStyle = `rgba(${color}, ${squares[i * rows + j]})`;
-                    ctx.fillRect(i * (squareSize + gridGap) * dpr, j * (squareSize + gridGap) * dpr, squareSize * dpr, squareSize * dpr);
-                }
-            }
-        };
-
-        let lastTime = 0;
-        const animate = (time) => {
-            if (!isInView) return;
-            const deltaTime = (time - lastTime) / 1000;
-            lastTime = time;
-            for (let i = 0; i < squares.length; i++) {
-                if (Math.random() < flickerChance * deltaTime) squares[i] = Math.random() * maxOpacity;
-            }
-            draw();
-            raf = requestAnimationFrame(animate);
-        };
-
-        setup();
-        draw();
-        const resizeObserver = new ResizeObserver(() => {
-            setup();
-            draw();
-        });
-        resizeObserver.observe(container);
-
-        let intersectionObserver = null;
-        if (!shouldReduceMotion) {
-            intersectionObserver = new IntersectionObserver(([entry]) => {
-                isInView = entry.isIntersecting;
-                if (isInView) {
-                    lastTime = performance.now();
-                    raf = requestAnimationFrame(animate);
-                } else if (raf) {
-                    cancelAnimationFrame(raf);
-                }
-            }, { threshold: 0 });
-            intersectionObserver.observe(canvas);
-        }
-
-        return () => {
-            if (raf) cancelAnimationFrame(raf);
-            resizeObserver.disconnect();
-            if (intersectionObserver) intersectionObserver.disconnect();
-        };
-    }, [squareSize, gridGap, flickerChance, maxOpacity, color, shouldReduceMotion]);
-
-    return (
-        <div ref={containerRef} className={className} aria-hidden="true">
-            <canvas ref={canvasRef} className="flickering-grid-canvas" />
-        </div>
-    );
-}
-
 export default function Landing() {
     const navigate = useNavigate();
     const shouldReduceMotion = useReducedMotion();
@@ -422,17 +331,24 @@ export default function Landing() {
                     <div className="landing-nav-links">
                         <a href="#features">Features</a>
                         <a href="#quick-start">Quick Start</a>
-                        <a href="#top">Docs</a>
+                        <a href={`${REPO_URL}/tree/main/docs`} target="_blank" rel="noreferrer">Docs</a>
                     </div>
                     <div className="landing-nav-actions">
-                        <a href="#quick-start" className="btn-ghost-nav">Quick Start</a>
                         <motion.button
-                            className="btn-filled-nav"
+                            className="btn-ghost-nav"
                             onClick={() => navigate('/demo')}
                             whileHover={{ scale: 1.04 }}
                             whileTap={{ scale: 0.96 }}
                         >
-                            Try the demo
+                            Browser Demo
+                        </motion.button>
+                        <motion.button
+                            className="btn-filled-nav"
+                            onClick={() => navigate('/app')}
+                            whileHover={{ scale: 1.04 }}
+                            whileTap={{ scale: 0.96 }}
+                        >
+                            Open Console
                         </motion.button>
                     </div>
                 </div>
@@ -460,21 +376,21 @@ export default function Landing() {
                     <motion.div className="hero-actions" variants={fadeUp}>
                         <motion.button
                             className="btn-filled-lg"
-                            onClick={() => navigate('/demo')}
+                            onClick={() => navigate('/app')}
                             whileHover={{ scale: 1.03, y: -1 }}
                             whileTap={{ scale: 0.97 }}
                         >
-                            Try it now
+                            Launch Console
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
                         </motion.button>
-                        <motion.a
-                            href="#quick-start"
+                        <motion.button
                             className="btn-ghost-lg"
+                            onClick={() => navigate('/demo')}
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.97 }}
                         >
-                            Quick start
-                        </motion.a>
+                            Browser Demo
+                        </motion.button>
                     </motion.div>
                     <motion.p className="hero-actions-hint" variants={fadeUp}>
                         The demo runs entirely in your browser with sample data — no signup, no server to run.
@@ -533,63 +449,98 @@ export default function Landing() {
                     </div>
                 </section>
 
-                <section id="quick-start" className="landing-section alt" ref={quickStartRef}>
-                    <div className="section-inner quick-start-grid">
-                        <div>
-                            <span className="section-eyebrow">Get running</span>
-                            <h2>Up in three commands.</h2>
-                            <p className="quick-start-lede">
-                                The console runs on :8080, the API on :8000. Everything else — persistence,
-                                embeddings, the visualizer — is wired up by default.
-                            </p>
-                            <ol className="quick-start-steps">
-                                {STEPS.map((s) => (
-                                    <li key={s.label}>
-                                        <span className="step-label">{s.label}</span>
-                                    </li>
-                                ))}
-                            </ol>
-                        </div>
-                        <TerminalBlock steps={STEPS} />
+                <div className="bottom-field">
+                    <div className="bottom-field-shards" aria-hidden="true">
+                        <AeroShards
+                            backgroundColor="#030405"
+                            shardColor="#1f5d4d"
+                            accentColor="#22d3a4"
+                            placement="full"
+                            flow="stream"
+                            material="pearl"
+                            detail="balanced"
+                            effect="none"
+                            scale={1}
+                            spread={1}
+                            depth={1}
+                            speed={0.7}
+                            spin={1}
+                            interaction="none"
+                            density={1.1}
+                            shardSize={0.9}
+                            stretch={1}
+                            turbulence={0.8}
+                            glow={0.9}
+                            edgeSoftness={2}
+                            bloom={0.4}
+                            grain={0.05}
+                            chromaticAberration={0.005}
+                            transitionDuration={1.4}
+                            interactionRadius={1.5}
+                            interactionStrength={0.4}
+                            rippleIntensity={0.8}
+                            holdToGather={false}
+                            paused={shouldReduceMotion}
+                        />
                     </div>
-                </section>
 
-                <section className="landing-cta" ref={ctaRef}>
-                    <FlickeringGrid className="cta-grid" />
-                    <div className="section-inner cta-inner">
-                        <h2>See your data as a space, not a table.</h2>
-                        <motion.button
-                            className="btn-filled-lg"
-                            onClick={() => navigate('/app')}
-                            whileHover={{ scale: 1.03, y: -1 }}
-                            whileTap={{ scale: 0.97 }}
-                        >
-                            Try it now
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-                        </motion.button>
-                    </div>
-                </section>
-
-                <footer className="landing-footer" ref={footerRef}>
-                    <div className="section-inner footer-inner">
-                        <span className="landing-logo">
-                            <svg viewBox="0 0 32 32" fill="none" className="landing-logo-mark">
-                                <circle cx="16" cy="10" r="2.4" fill="var(--accent)" />
-                                <circle cx="9" cy="21" r="2.4" fill="currentColor" />
-                                <circle cx="23" cy="21" r="2.4" fill="currentColor" />
-                            </svg>
-                            <span>NexusDB</span>
-                        </span>
-                        <div className="footer-right">
-                            <a className="footer-status up" href={REPO_URL} target="_blank" rel="noreferrer">
-                                <span className="footer-status-dot" />
-                                Self-hosted · open source
-                            </a>
-                            <span className="footer-sep">·</span>
-                            <span className="footer-meta">rev.0.1.0</span>
+                    <section id="quick-start" className="landing-section alt" ref={quickStartRef}>
+                        <div className="section-inner quick-start-grid">
+                            <div>
+                                <span className="section-eyebrow">Get running</span>
+                                <h2>Up in three commands.</h2>
+                                <p className="quick-start-lede">
+                                    The console runs on :8080, the API on :8000. Everything else — persistence,
+                                    embeddings, the visualizer — is wired up by default.
+                                </p>
+                                <ol className="quick-start-steps">
+                                    {STEPS.map((s) => (
+                                        <li key={s.label}>
+                                            <span className="step-label">{s.label}</span>
+                                        </li>
+                                    ))}
+                                </ol>
+                            </div>
+                            <TerminalBlock steps={STEPS} />
                         </div>
-                    </div>
-                </footer>
+                    </section>
+
+                    <section className="landing-cta" ref={ctaRef}>
+                        <div className="section-inner cta-inner">
+                            <h2>See your data as a space, not a table.</h2>
+                            <motion.button
+                                className="btn-filled-lg"
+                                onClick={() => navigate('/app')}
+                                whileHover={{ scale: 1.03, y: -1 }}
+                                whileTap={{ scale: 0.97 }}
+                            >
+                                Try it now
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                            </motion.button>
+                        </div>
+                    </section>
+
+                    <footer className="landing-footer" ref={footerRef}>
+                        <div className="section-inner footer-inner">
+                            <span className="landing-logo">
+                                <svg viewBox="0 0 32 32" fill="none" className="landing-logo-mark">
+                                    <circle cx="16" cy="10" r="2.4" fill="var(--accent)" />
+                                    <circle cx="9" cy="21" r="2.4" fill="currentColor" />
+                                    <circle cx="23" cy="21" r="2.4" fill="currentColor" />
+                                </svg>
+                                <span>NexusDB</span>
+                            </span>
+                            <div className="footer-right">
+                                <a className="footer-status up" href={REPO_URL} target="_blank" rel="noreferrer">
+                                    <span className="footer-status-dot" />
+                                    Self-hosted · open source
+                                </a>
+                                <span className="footer-sep">·</span>
+                                <span className="footer-meta">rev.0.1.0</span>
+                            </div>
+                        </div>
+                    </footer>
+                </div>
             </div>
         </div>
     );

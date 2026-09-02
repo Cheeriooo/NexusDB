@@ -8,9 +8,11 @@ version. Auth (API key) and rate limiting apply to /v1 only.
 from __future__ import annotations
 
 import json
+import secrets
 import time
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -37,7 +39,7 @@ from nexusdb.observability.logging import (
 )
 from nexusdb.observability.metrics import CollectionMetricsCollector
 from nexusdb.observability.tracing import configure_tracing, get_tracer
-from nexusdb.persistence.config import AUTO_PERSIST, get_collection_db_path
+from nexusdb.persistence.config import AUTO_PERSIST, PERSIST_DIR, get_collection_db_path
 from nexusdb.persistence.sqlite_backend import SQLiteBackend
 
 configure_logging()
@@ -211,7 +213,7 @@ def require_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Ke
     `X-API-Key` header. When the env var is unset (the default), auth is
     disabled entirely — fine for local dev, not for a real deployment.
     """
-    if API_KEY is not None and x_api_key != API_KEY:
+    if API_KEY is not None and not secrets.compare_digest(x_api_key or "", API_KEY):
         raise HTTPException(status_code=401, detail="Missing or invalid API key")
 
 
@@ -235,6 +237,26 @@ def _get_backend(collection_name: str) -> SQLiteBackend:
         backend = SQLiteBackend(get_collection_db_path(collection_name))
         _backends[collection_name] = backend
     return backend
+
+
+def _resolve_persist_path(filename: str) -> Path:
+    """Resolve a client-supplied filename to a path inside PERSIST_DIR.
+
+    The save/load endpoints take a bare filename, not an arbitrary path —
+    otherwise a remote client could write or read any file the server
+    process can access. Raises HTTPException(400) on any path-like input
+    (separators, absolute paths, `..`) or on the rare case a resolved path
+    still lands outside PERSIST_DIR.
+    """
+    candidate = Path(filename)
+    if candidate.is_absolute() or candidate.name != filename or filename in ("", ".", ".."):
+        raise HTTPException(status_code=400, detail="filepath must be a bare filename")
+
+    resolved_dir = PERSIST_DIR.resolve()
+    resolved = (resolved_dir / candidate).resolve()
+    if resolved != resolved_dir and resolved_dir not in resolved.parents:
+        raise HTTPException(status_code=400, detail="filepath must be a bare filename")
+    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +354,14 @@ def _auto_persist_delete(collection_name: str, vector_id: str) -> None:
 
 
 class CollectionCreate(BaseModel):
-    name: str = Field(..., description="Unique collection name", examples=["docs"])
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="Unique collection name (letters, digits, '_' and '-' only)",
+        examples=["docs"],
+    )
     dimension: int = Field(..., gt=0, description="Fixed vector dimensionality for this collection")
     metric: str = Field(
         default="cosine", description="Distance metric: 'cosine', 'euclidean', or 'dot'"
@@ -420,7 +449,13 @@ class VectorResponse(BaseModel):
 
 class SaveCollectionRequest(BaseModel):
     collection: str
-    filepath: str
+    filepath: str = Field(
+        ...,
+        description=(
+            "Filename (no path separators) to save under the server's persist "
+            "directory — not an arbitrary filesystem path."
+        ),
+    )
 
 
 class SaveCollectionResponse(BaseModel):
@@ -430,7 +465,13 @@ class SaveCollectionResponse(BaseModel):
 
 
 class LoadCollectionRequest(BaseModel):
-    filepath: str
+    filepath: str = Field(
+        ...,
+        description=(
+            "Filename (no path separators) to load from the server's persist "
+            "directory — not an arbitrary filesystem path."
+        ),
+    )
     collection_name: str | None = None  # Override loaded name if provided
 
 
@@ -786,14 +827,17 @@ def save_collection(name: str, req: SaveCollectionRequest):
     if name not in _collections:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
 
+    destination = _resolve_persist_path(req.filepath)
     try:
         col = _collections[name]
-        col.save(req.filepath)
+        col.save(destination)
         return SaveCollectionResponse(
             message=f"Collection '{name}' saved successfully",
             collection=name,
             filepath=req.filepath,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save collection: {e}") from e
 
@@ -801,10 +845,11 @@ def save_collection(name: str, req: SaveCollectionRequest):
 @router.post("/collections/load", response_model=LoadCollectionResponse, tags=["persistence"])
 def load_collection(req: LoadCollectionRequest):
     """Load a collection from disk."""
+    source = _resolve_persist_path(req.filepath)
     try:
         from nexusdb.core.collection import Collection
 
-        col = Collection.load(req.filepath)
+        col = Collection.load(source)
         if col is None:
             raise HTTPException(
                 status_code=400,

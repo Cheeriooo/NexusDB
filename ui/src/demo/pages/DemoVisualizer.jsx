@@ -33,6 +33,11 @@ export default function DemoVisualizer({ addToast, collections }) {
     }, []);
 
     useEffect(() => {
+        // Resetting query state here (rather than deriving it during render)
+        // is intentional: it must run only when `selected` actually changes,
+        // not on every render, and it's paired with the addToast side effect
+        // below for the same change.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setQueryPos(null);
         setQueryInfo(null);
         setQueryText('');

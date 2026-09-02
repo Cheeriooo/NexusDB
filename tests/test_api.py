@@ -606,3 +606,70 @@ class TestObservability:
         )
         r = client._client.get("/metrics")
         assert 'nexusdb_collection_vectors{collection="m",index_type="flat"} 1.0' in r.text
+
+
+# ------------------------------------------------------------------
+# Persistence: save/load path safety
+# ------------------------------------------------------------------
+
+
+class TestPersistencePathSafety:
+    """save/load take a bare filename confined to PERSIST_DIR, not an
+    arbitrary filesystem path — a remote client must not be able to write
+    or read files outside that directory."""
+
+    def _persist_dir(self, tmp_path, monkeypatch):
+        import nexusdb.api.server as server
+
+        monkeypatch.setattr(server, "PERSIST_DIR", tmp_path)
+        return tmp_path
+
+    def test_save_round_trips_within_persist_dir(self, tmp_path, monkeypatch):
+        self._persist_dir(tmp_path, monkeypatch)
+        client.post("/collections", json={"name": "p", "dimension": 2})
+        client.post(
+            "/vectors/upsert",
+            json={"collection": "p", "vectors": [{"values": [1.0, 0.0]}]},
+        )
+        r = client.post("/collections/p/save", json={"collection": "p", "filepath": "p.db"})
+        assert r.status_code == 200
+        assert (tmp_path / "p.db").exists()
+
+    @pytest.mark.parametrize(
+        "bad_path",
+        [
+            "../escape.db",
+            "../../etc/passwd",
+            "/absolute/path.db",
+            "sub/dir.db",
+        ],
+    )
+    def test_save_rejects_path_traversal(self, tmp_path, monkeypatch, bad_path):
+        self._persist_dir(tmp_path, monkeypatch)
+        client.post("/collections", json={"name": "p", "dimension": 2})
+        r = client.post("/collections/p/save", json={"collection": "p", "filepath": bad_path})
+        assert r.status_code == 400
+
+    @pytest.mark.parametrize(
+        "bad_path",
+        ["../escape.db", "/absolute/path.db", "sub/dir.db", ""],
+    )
+    def test_load_rejects_path_traversal(self, tmp_path, monkeypatch, bad_path):
+        self._persist_dir(tmp_path, monkeypatch)
+        r = client.post("/collections/load", json={"filepath": bad_path})
+        assert r.status_code == 400
+
+
+class TestCollectionNameValidation:
+
+    def test_rejects_path_traversal_in_name(self):
+        r = client.post("/collections", json={"name": "../escape", "dimension": 2})
+        assert r.status_code == 422
+
+    def test_rejects_slash_in_name(self):
+        r = client.post("/collections", json={"name": "a/b", "dimension": 2})
+        assert r.status_code == 422
+
+    def test_accepts_safe_name(self):
+        r = client.post("/collections", json={"name": "safe-name_1", "dimension": 2})
+        assert r.status_code == 201

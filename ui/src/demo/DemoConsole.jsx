@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Toast from '../components/Toast';
 import DemoDashboard from './pages/DemoDashboard';
@@ -34,7 +34,6 @@ const PAGES = {
 const REPO_URL = 'https://github.com/Cheeriooo/NexusDB';
 
 export default function DemoConsole() {
-    const navigate = useNavigate();
     const [activeView, setActiveView] = useState('dashboard');
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [toasts, setToasts] = useState([]);

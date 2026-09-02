@@ -31,7 +31,9 @@ export default function DemoSearch({ addToast, collections }) {
         setLoading(false);
     };
 
-    const runSuggested = (text) => {
+    // Curried so the click handler passed to JSX (`onClick={handleRunSuggested(s)}`)
+    // is the function that actually performs the timing, not a wrapper around it.
+    const handleRunSuggested = (text) => () => {
         setQuery(text);
         if (!selected) return;
         setLoading(true);
@@ -81,7 +83,7 @@ export default function DemoSearch({ addToast, collections }) {
                                 {suggestions.length > 0 && (
                                     <div className="demo-suggested-queries">
                                         {suggestions.map((s) => (
-                                            <button key={s} type="button" className="demo-query-chip" onClick={() => runSuggested(s)}>
+                                            <button key={s} type="button" className="demo-query-chip" onClick={handleRunSuggested(s)}>
                                                 {s}
                                             </button>
                                         ))}

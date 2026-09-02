@@ -19,7 +19,7 @@
     --font-display: 'Fraunces', var(--font-sans);
     width: 100%;
     min-height: 100vh;
-    background: var(--bg-primary);
+    background: var(--void);
     color: var(--text-primary);
     overflow-x: hidden;
 }
@@ -441,11 +441,10 @@
 .landing-section {
     position: relative;
     padding: 180px 32px 96px;
-    background: linear-gradient(to bottom, var(--void) 0%, var(--bg-primary) 100%);
+    background: var(--void);
 }
 
 .landing-section.alt {
-    background: linear-gradient(to bottom, var(--bg-primary) 0%, var(--bg-tertiary) 100%);
     padding: 96px 32px;
 }
 
@@ -691,31 +690,39 @@
     color: var(--text-primary);
 }
 
-/* ---- CTA band ---- */
-.landing-cta {
+/* ---- Bottom field ----
+   Quick start, the CTA band, and the footer share one continuous
+   AeroShards field instead of each owning a separate boxed background
+   — the shard canvas spans all three so it flows behind the quick-start
+   copy and the CTA headline alike, rather than being penned into a
+   single tall rectangle. */
+.bottom-field {
     position: relative;
-    padding: 96px 32px;
-    background:
-        radial-gradient(ellipse 70% 90% at 50% 0%, rgba(34, 211, 164, 0.1), transparent 65%),
-        linear-gradient(to bottom, var(--bg-tertiary) 0%, var(--void) 100%);
-    color: var(--text-primary);
+    background: var(--void);
     overflow: hidden;
 }
 
-/* Abstract "live data" texture (magicui.design/docs/components/flickering-grid),
-   masked to a soft vignette so it reads as ambient depth behind the
-   copy rather than a hard-edged tile — deliberately not another
-   dots-and-lines graph. */
-.cta-grid {
+.bottom-field-shards {
     position: absolute;
     inset: 0;
     z-index: 0;
-    mask-image: radial-gradient(ellipse 70% 80% at 50% 40%, #000 0%, transparent 75%);
-    -webkit-mask-image: radial-gradient(ellipse 70% 80% at 50% 40%, #000 0%, transparent 75%);
+    pointer-events: none;
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 620px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 620px);
 }
 
-.flickering-grid-canvas {
-    display: block;
+#quick-start.landing-section.alt {
+    position: relative;
+    z-index: 1;
+    background: none;
+}
+
+/* ---- CTA band ---- */
+.landing-cta {
+    position: relative;
+    z-index: 1;
+    padding: 96px 32px 64px;
+    color: var(--text-primary);
 }
 
 /* The CTA's own border-beam host — scoped separately from the shared
@@ -728,6 +735,7 @@
 .cta-inner {
     position: relative;
     z-index: 1;
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -747,16 +755,16 @@
     flex-shrink: 0;
 }
 
-/* ---- Footer ----
-   Continues the CTA band's --void rather than jumping back to
-   --bg-primary, so the page settles into dark instead of bouncing. */
+/* ---- Footer ---- */
 .landing-footer {
+    position: relative;
+    z-index: 1;
     padding: 24px 32px;
-    background: var(--void);
-    border-top: 1px solid var(--border-color);
 }
 
 .footer-inner {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: space-between;

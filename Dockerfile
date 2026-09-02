@@ -26,6 +26,11 @@ ENV NEXUSDB_AUTO_PERSIST=true \
     NEXUSDB_PERSIST_DIR=/data \
     PYTHONUNBUFFERED=1
 
+# Run as an unprivileged user rather than root.
+RUN groupadd --system nexusdb && useradd --system --gid nexusdb --home /app nexusdb \
+    && mkdir -p /data && chown -R nexusdb:nexusdb /app /data
+USER nexusdb
+
 VOLUME ["/data"]
 
 EXPOSE 8000

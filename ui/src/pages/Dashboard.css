@@ -15,8 +15,9 @@
     display: flex;
     align-items: center;
     gap: 16px;
-        position: relative;
+    position: relative;
     overflow: hidden;
+    transition: border-color var(--duration) var(--ease);
 }
 
 .metric-card::before {
@@ -30,12 +31,14 @@
     transition: background var(--duration) var(--ease);
 }
 
-.metric-card:hover::before {
-    background: var(--accent);
-}
+@media (hover: hover) and (pointer: fine) {
+    .metric-card:hover::before {
+        background: var(--accent);
+    }
 
-.metric-card:hover {
-    border-color: var(--border-hover);
+    .metric-card:hover {
+        border-color: var(--border-hover);
+    }
 }
 
 .metric-accent .metric-icon {
@@ -147,15 +150,22 @@
     text-align: left;
     font-family: var(--font-sans);
     margin-bottom: 8px;
+    transition: background var(--duration) var(--ease), border-color var(--duration) var(--ease), transform 160ms var(--ease-out-expo);
 }
 
 .action-btn:last-child {
     margin-bottom: 0;
 }
 
-.action-btn:hover {
-    background: var(--bg-card-hover);
-    border-color: var(--border-hover);
+.action-btn:active {
+    transform: scale(0.98);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .action-btn:hover {
+        background: var(--bg-card-hover);
+        border-color: var(--border-hover);
+    }
 }
 
 .action-btn svg {
