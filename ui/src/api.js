@@ -1,8 +1,13 @@
-const BASE = '/api/v1';
+// Empty by default: same-origin relative paths, proxied to the API by the
+// Vite dev server (vite.config.js) or nginx (ui/nginx.conf) in the Docker
+// image. Set VITE_API_BASE at build time to point a deployed frontend
+// (e.g. on Vercel) at an API hosted on a different origin.
+const API_ORIGIN = import.meta.env.VITE_API_BASE || '';
+const BASE = `${API_ORIGIN}/api/v1`;
 
 async function request(path, options = {}) {
     // /health is unversioned (liveness probes shouldn't care about API version)
-    const base = path === '/health' ? '/api' : BASE;
+    const base = path === '/health' ? `${API_ORIGIN}/api` : BASE;
     const res = await fetch(`${base}${path}`, {
         headers: { 'Content-Type': 'application/json' },
         ...options,

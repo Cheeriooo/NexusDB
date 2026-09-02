@@ -1,7 +1,6 @@
 # Architecture (Current State)
 
-A snapshot of how NexusDB actually works today, as of this writing. This is the
-baseline the [roadmap](./ROADMAP.md) builds from — keep it updated as things change.
+A snapshot of how NexusDB actually works today. Keep it updated as things change.
 
 ## Components
 
@@ -79,9 +78,9 @@ numbers comparing the two index types at 1k/10k/100k vectors.
   path-traversal angle through auto-persist filenames.
 
 None of this adds up to "safe to expose directly on the public internet
-without a reverse proxy and TLS" — see
-[`docs/PRODUCTION_READINESS.md`](./PRODUCTION_READINESS.md) for the honest
-gap list.
+without a reverse proxy and TLS" — put NexusDB behind a proxy that terminates
+TLS, and set `NEXUSDB_API_KEY`/`NEXUSDB_CORS_ORIGINS` before deploying it
+anywhere beyond localhost.
 
 ## What's real vs. what's a placeholder
 

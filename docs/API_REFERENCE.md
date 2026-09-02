@@ -90,7 +90,3 @@ structured JSON log line server-side.
 - Auth is demo-grade: one shared `X-API-Key`, not per-key records or
   multi-tenancy — any client with the key can read/write any collection.
 - No dependency vulnerability scanning (`pip-audit`/`npm audit`/Dependabot).
-- No live deployed demo yet (deliberately deferred to Phase 6).
-
-These are tracked in [PRODUCTION_READINESS.md](./PRODUCTION_READINESS.md)
-and [ROADMAP.md](./ROADMAP.md).

@@ -104,10 +104,9 @@ than glossed over:
 - There is no multi-tenancy: any client holding the API key can read or write
   any collection.
 
-See [`docs/PRODUCTION_READINESS.md`](./docs/PRODUCTION_READINESS.md) for the
-full, current checklist of what's covered and what isn't. If you find a
-security issue, please open an issue rather than a public PR with exploit
-details.
+See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md#security-posture) for the
+full rundown of what's covered and what isn't. If you find a security issue,
+please open an issue rather than a public PR with exploit details.
 
 ## Benchmarks
 
@@ -125,9 +124,6 @@ does and doesn't win on wall-clock time: [`docs/BENCHMARKS.md`](./docs/BENCHMARK
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — how the system works today
 - [`docs/API_REFERENCE.md`](./docs/API_REFERENCE.md) — REST API surface
 - [`docs/BENCHMARKS.md`](./docs/BENCHMARKS.md) — ANN vs. brute-force numbers
-- [`docs/PRODUCTION_READINESS.md`](./docs/PRODUCTION_READINESS.md) — checklist
-  of what "production-ready" requires and current status against it
-- [`docs/ROADMAP.md`](./docs/ROADMAP.md) — phased plan and status log
 
 ## Testing
 
