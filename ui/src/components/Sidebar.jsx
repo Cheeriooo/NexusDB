@@ -74,12 +74,17 @@ export default function Sidebar({ activeView, onNavigate, isOpen, onClose }) {
                     <Link to="/" className="logo">
                         <div className="logo-mark">
                             <svg viewBox="0 0 32 32" fill="none">
-                                <circle cx="16" cy="10" r="2.2" fill="var(--accent)" />
-                                <circle cx="9" cy="21" r="2.2" fill="var(--text-secondary)" />
-                                <circle cx="23" cy="21" r="2.2" fill="var(--text-secondary)" />
-                                <line x1="16" y1="10" x2="9" y2="21" stroke="var(--border-hover)" strokeWidth="1.2" />
-                                <line x1="16" y1="10" x2="23" y2="21" stroke="var(--border-hover)" strokeWidth="1.2" />
-                                <line x1="9" y1="21" x2="23" y2="21" stroke="var(--border-hover)" strokeWidth="1.2" />
+                                <line x1="16" y1="16" x2="16" y2="5" stroke="var(--accent)" strokeWidth="1.1" strokeLinecap="round" />
+                                <line x1="16" y1="16" x2="26.45" y2="12.6" stroke="var(--border-hover)" strokeWidth="0.9" strokeLinecap="round" />
+                                <line x1="16" y1="16" x2="22.45" y2="24.9" stroke="var(--border-hover)" strokeWidth="0.9" strokeLinecap="round" />
+                                <line x1="16" y1="16" x2="9.55" y2="24.9" stroke="var(--border-hover)" strokeWidth="0.9" strokeLinecap="round" />
+                                <line x1="16" y1="16" x2="5.55" y2="12.6" stroke="var(--border-hover)" strokeWidth="0.9" strokeLinecap="round" />
+                                <circle cx="26.45" cy="12.6" r="1.7" fill="var(--text-secondary)" />
+                                <circle cx="22.45" cy="24.9" r="1.7" fill="var(--text-secondary)" />
+                                <circle cx="9.55" cy="24.9" r="1.7" fill="var(--text-secondary)" />
+                                <circle cx="5.55" cy="12.6" r="1.7" fill="var(--text-secondary)" />
+                                <circle cx="16" cy="5" r="2.1" fill="var(--accent)" />
+                                <circle cx="16" cy="16" r="2.8" fill="var(--accent)" />
                             </svg>
                         </div>
                         <div className="logo-text">

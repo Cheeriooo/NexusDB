@@ -6,6 +6,12 @@ import AeroShards from '../components/AeroShards';
 import './Landing.css';
 
 const REPO_URL = 'https://github.com/Cheeriooo/NexusDB';
+const THEME_KEY = 'nexusdb-landing-theme';
+
+const SHARD_PALETTE = {
+    dark: { backgroundColor: '#030405', shardColor: '#1f5d4d', accentColor: '#22d3a4' },
+    light: { backgroundColor: '#f4f6f2', shardColor: '#a9cdbb', accentColor: '#0e9f7a' },
+};
 
 const FEATURES = [
     {
@@ -144,7 +150,7 @@ function TerminalLine({ index, text, active, done, instant, onDone }) {
 
     return (
         <div className="code-line">
-            <span className="code-prompt">$</span>
+            <span className="code-prompt">❯</span>
             <code>{shown}</code>
             {showCursor && <span className="terminal-cursor" />}
         </div>
@@ -209,6 +215,43 @@ export default function Landing() {
     const navigate = useNavigate();
     const shouldReduceMotion = useReducedMotion();
     const [scrolled, setScrolled] = useState(false);
+    const [theme, setTheme] = useState(() => {
+        try {
+            return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+        } catch {
+            return 'dark';
+        }
+    });
+
+    const toggleTheme = () => {
+        setTheme((current) => {
+            const next = current === 'dark' ? 'light' : 'dark';
+            try {
+                localStorage.setItem(THEME_KEY, next);
+            } catch {
+                // localStorage unavailable (private browsing, etc.) — theme
+                // just won't persist across visits.
+            }
+            return next;
+        });
+    };
+
+    // The favicon is shared, static markup in index.html — everywhere else
+    // in the app it stays the brand default (dark), but while the landing
+    // page is mounted it tracks whatever theme the visitor picked here, and
+    // reverts on unmount so navigating into the (always-dark) console or
+    // demo doesn't leave the light tile behind in the tab.
+    useEffect(() => {
+        const svgLink = document.getElementById('favicon-svg');
+        const pngLink = document.getElementById('favicon-png');
+        const suffix = theme === 'light' ? '-light' : '';
+        if (svgLink) svgLink.href = `/favicon${suffix}.svg`;
+        if (pngLink) pngLink.href = `/favicon${suffix}.png`;
+        return () => {
+            if (svgLink) svgLink.href = '/favicon.svg';
+            if (pngLink) pngLink.href = '/favicon.png';
+        };
+    }, [theme]);
     const { scrollY } = useScroll();
     const heroOpacity = useTransform(scrollY, [0, 420], [1, 0.15]);
     const heroY = useTransform(scrollY, [0, 420], [0, 60]);
@@ -309,7 +352,7 @@ export default function Landing() {
     }, [shouldReduceMotion]);
 
     return (
-        <div className="landing">
+        <div className="landing" data-theme={theme}>
             <motion.nav
                 className={`landing-nav ${scrolled ? 'scrolled' : ''}`}
                 initial={{ y: -24, opacity: 0 }}
@@ -319,14 +362,19 @@ export default function Landing() {
                 <div className="landing-nav-inner">
                     <a href="#top" className="landing-logo">
                         <svg viewBox="0 0 32 32" fill="none" className="landing-logo-mark">
-                            <circle cx="16" cy="10" r="2.4" fill="var(--accent)" />
-                            <circle cx="9" cy="21" r="2.4" fill="currentColor" />
-                            <circle cx="23" cy="21" r="2.4" fill="currentColor" />
-                            <line x1="16" y1="10" x2="9" y2="21" stroke="currentColor" strokeWidth="1.2" opacity="0.35" />
-                            <line x1="16" y1="10" x2="23" y2="21" stroke="currentColor" strokeWidth="1.2" opacity="0.35" />
-                            <line x1="9" y1="21" x2="23" y2="21" stroke="currentColor" strokeWidth="1.2" opacity="0.35" />
+                            <line x1="16" y1="16" x2="16" y2="5" stroke="var(--accent)" strokeWidth="1.1" strokeLinecap="round" />
+                            <line x1="16" y1="16" x2="26.45" y2="12.6" stroke="currentColor" strokeWidth="0.65" strokeLinecap="round" opacity="0.35" />
+                            <line x1="16" y1="16" x2="22.45" y2="24.9" stroke="currentColor" strokeWidth="0.65" strokeLinecap="round" opacity="0.35" />
+                            <line x1="16" y1="16" x2="9.55" y2="24.9" stroke="currentColor" strokeWidth="0.65" strokeLinecap="round" opacity="0.35" />
+                            <line x1="16" y1="16" x2="5.55" y2="12.6" stroke="currentColor" strokeWidth="0.65" strokeLinecap="round" opacity="0.35" />
+                            <circle cx="26.45" cy="12.6" r="1.7" fill="currentColor" opacity="0.85" />
+                            <circle cx="22.45" cy="24.9" r="1.7" fill="currentColor" opacity="0.85" />
+                            <circle cx="9.55" cy="24.9" r="1.7" fill="currentColor" opacity="0.85" />
+                            <circle cx="5.55" cy="12.6" r="1.7" fill="currentColor" opacity="0.85" />
+                            <circle cx="16" cy="5" r="2.1" fill="var(--accent)" />
+                            <circle cx="16" cy="16" r="2.8" fill="var(--accent)" />
                         </svg>
-                        <span>NexusDB</span>
+                        <span><span className="brand-nexus">Nexus</span><span className="brand-db">DB</span></span>
                     </a>
                     <div className="landing-nav-links">
                         <a href="#features">Features</a>
@@ -334,6 +382,21 @@ export default function Landing() {
                         <a href={`${REPO_URL}/tree/main/docs`} target="_blank" rel="noreferrer">Docs</a>
                     </div>
                     <div className="landing-nav-actions">
+                        <motion.button
+                            type="button"
+                            className="theme-toggle"
+                            onClick={toggleTheme}
+                            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                            aria-pressed={theme === 'light'}
+                            whileHover={{ scale: 1.06 }}
+                            whileTap={{ scale: 0.94 }}
+                        >
+                            {theme === 'dark' ? (
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="4.5" /><line x1="12" y1="2" x2="12" y2="4.5" /><line x1="12" y1="19.5" x2="12" y2="22" /><line x1="4.2" y1="4.2" x2="6" y2="6" /><line x1="18" y1="18" x2="19.8" y2="19.8" /><line x1="2" y1="12" x2="4.5" y2="12" /><line x1="19.5" y1="12" x2="22" y2="12" /><line x1="4.2" y1="19.8" x2="6" y2="18" /><line x1="18" y1="6" x2="19.8" y2="4.2" /></svg>
+                            ) : (
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" /></svg>
+                            )}
+                        </motion.button>
                         <motion.button
                             className="btn-ghost-nav"
                             onClick={() => navigate('/demo')}
@@ -452,9 +515,9 @@ export default function Landing() {
                 <div className="bottom-field">
                     <div className="bottom-field-shards" aria-hidden="true">
                         <AeroShards
-                            backgroundColor="#030405"
-                            shardColor="#1f5d4d"
-                            accentColor="#22d3a4"
+                            backgroundColor={SHARD_PALETTE[theme].backgroundColor}
+                            shardColor={SHARD_PALETTE[theme].shardColor}
+                            accentColor={SHARD_PALETTE[theme].accentColor}
                             placement="full"
                             flow="stream"
                             material="pearl"
@@ -524,11 +587,15 @@ export default function Landing() {
                         <div className="section-inner footer-inner">
                             <span className="landing-logo">
                                 <svg viewBox="0 0 32 32" fill="none" className="landing-logo-mark">
-                                    <circle cx="16" cy="10" r="2.4" fill="var(--accent)" />
-                                    <circle cx="9" cy="21" r="2.4" fill="currentColor" />
-                                    <circle cx="23" cy="21" r="2.4" fill="currentColor" />
+                                    <line x1="16" y1="16" x2="16" y2="5" stroke="var(--accent)" strokeWidth="1.4" strokeLinecap="round" />
+                                    <line x1="16" y1="16" x2="25.53" y2="21.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.35" />
+                                    <line x1="16" y1="16" x2="6.47" y2="21.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.35" />
+                                    <circle cx="25.53" cy="21.5" r="2.2" fill="currentColor" opacity="0.85" />
+                                    <circle cx="6.47" cy="21.5" r="2.2" fill="currentColor" opacity="0.85" />
+                                    <circle cx="16" cy="5" r="2.4" fill="var(--accent)" />
+                                    <circle cx="16" cy="16" r="3" fill="var(--accent)" />
                                 </svg>
-                                <span>NexusDB</span>
+                                <span><span className="brand-nexus">Nexus</span><span className="brand-db">DB</span></span>
                             </span>
                             <div className="footer-right">
                                 <a className="footer-status up" href={REPO_URL} target="_blank" rel="noreferrer">

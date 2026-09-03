@@ -28,6 +28,40 @@
     box-sizing: border-box;
 }
 
+/* ---- Light theme ----
+   Scoped to .landing so it never touches the console app (Sidebar,
+   Dashboard, etc.), which stays dark-only by design. Redeclaring the same
+   custom-property names locally means every existing var(--void) /
+   var(--accent) / etc. rule below picks this up automatically — nothing
+   else in this file needs to know a light mode exists. */
+.landing[data-theme="light"] {
+    --void: #f4f6f2;
+    --bg-primary: #f4f6f2;
+    --bg-card: #ffffff;
+    --bg-card-hover: #eef1ed;
+    --bg-tertiary: #eef1ed;
+    --bg-inset: #eef1ed;
+
+    --border-color: rgba(18, 24, 21, 0.09);
+    --border-hover: rgba(18, 24, 21, 0.18);
+
+    --text-primary: #121815;
+    --text-secondary: rgba(18, 24, 21, 0.64);
+    --text-tertiary: rgba(18, 24, 21, 0.44);
+    --text-inverse: #f6f5f1;
+
+    --accent: #0e9f7a;
+    --accent-strong: #0b8267;
+    --accent-dim: rgba(14, 159, 122, 0.12);
+    --accent-line: rgba(14, 159, 122, 0.35);
+    --accent-glow: rgba(14, 159, 122, 0.22);
+
+    --shadow-subtle: 0 0 0 1px var(--border-color);
+    --shadow-subtle-2: 0 0 0 1px var(--border-color), 0 1px 2px rgba(18, 24, 21, 0.06);
+    --shadow-subtle-3: 0 4px 16px rgba(18, 24, 21, 0.06), 0 0 0 1px var(--border-color);
+    --shadow-xl: 0 24px 60px rgba(18, 24, 21, 0.12), 0 0 0 1px var(--border-color);
+}
+
 /* ---- Nav ---- */
 .landing-nav {
     position: fixed;
@@ -47,6 +81,11 @@
     -webkit-backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border-color);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.landing[data-theme="light"] .landing-nav.scrolled {
+    background: rgba(244, 246, 242, 0.82);
+    box-shadow: 0 8px 24px rgba(18, 24, 21, 0.08);
 }
 
 .landing-nav-inner {
@@ -75,6 +114,37 @@
     flex-shrink: 0;
 }
 
+.brand-db {
+    color: var(--accent);
+}
+
+/* ---- Theme toggle ---- */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    margin-right: 4px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background var(--duration) var(--ease), border-color var(--duration) var(--ease), color var(--duration) var(--ease);
+}
+
+.theme-toggle svg {
+    width: 16px;
+    height: 16px;
+}
+
+.theme-toggle:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+}
+
 .landing-nav-links {
     display: flex;
     align-items: center;
@@ -90,6 +160,19 @@
 
 .landing-nav-links a:hover {
     color: var(--accent);
+}
+
+/* Over the bare hero photo (before .scrolled adds a solid backing), the
+   light theme's teal accent and dark ink text can wash out against a
+   bright sky — a soft light halo keeps the mark and links readable
+   without needing a backing panel that would hide the photo. */
+.landing[data-theme="light"] .landing-nav:not(.scrolled) .landing-logo,
+.landing[data-theme="light"] .landing-nav:not(.scrolled) .landing-nav-links a {
+    text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8), 0 1px 14px rgba(255, 255, 255, 0.6);
+}
+
+.landing[data-theme="light"] .landing-nav:not(.scrolled) .landing-logo-mark {
+    filter: drop-shadow(0 1px 5px rgba(255, 255, 255, 0.85));
 }
 
 .landing-nav-actions {
@@ -172,6 +255,18 @@
             var(--void) 100%);
 }
 
+.landing[data-theme="light"] .hero-vignette {
+    background:
+        radial-gradient(ellipse 58% 40% at 50% 22%, rgba(255, 255, 255, 0.45), transparent 70%),
+        linear-gradient(to bottom,
+            rgba(244, 246, 242, 0.12) 0%,
+            rgba(244, 246, 242, 0.1) 16%,
+            rgba(244, 246, 242, 0.45) 42%,
+            rgba(244, 246, 242, 0.85) 60%,
+            var(--void) 74%,
+            var(--void) 100%);
+}
+
 .hero-content {
     position: relative;
     z-index: 1;
@@ -198,6 +293,10 @@
     padding: 5px 14px;
 }
 
+.landing[data-theme="light"] .hero-eyebrow {
+    background: rgba(255, 255, 255, 0.6);
+}
+
 .hero-content h1 {
     font-size: 3.9rem;
     line-height: 1.05;
@@ -207,6 +306,10 @@
     text-shadow: 0 2px 24px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
+.landing[data-theme="light"] .hero-content h1 {
+    text-shadow: 0 2px 20px rgba(255, 255, 255, 0.75), 0 1px 4px rgba(255, 255, 255, 0.6);
+}
+
 .shimmer-text {
     background: linear-gradient(90deg, var(--text-primary) 20%, var(--accent) 50%, var(--text-primary) 80%);
     background-size: 220% auto;
@@ -214,6 +317,16 @@
     background-clip: text;
     color: transparent;
     animation: shimmer 5s linear infinite;
+}
+
+/* Dark mode's sweep runs between two light, vivid stops (white, mint), so
+   every frame reads as a bright shine. Reusing --text-primary here would
+   sweep between light mode's near-black ink and the accent instead — that
+   pair desaturates into a muddy grey-green mid-blend against the bold
+   black headline around it. Staying inside the accent family keeps every
+   frame vivid, the same way the dark-mode version does. */
+.landing[data-theme="light"] .shimmer-text {
+    background-image: linear-gradient(90deg, var(--accent-strong) 20%, var(--accent) 50%, var(--accent-strong) 80%);
 }
 
 @keyframes shimmer {
@@ -228,6 +341,11 @@
     color: rgba(242, 244, 245, 0.88);
     text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
     max-width: 560px;
+}
+
+.landing[data-theme="light"] .hero-content p {
+    color: rgba(18, 24, 21, 0.86);
+    text-shadow: 0 2px 16px rgba(255, 255, 255, 0.6);
 }
 
 .hero-actions {
@@ -287,6 +405,10 @@
     border-color: var(--text-tertiary);
 }
 
+.landing[data-theme="light"] .btn-ghost-lg:hover {
+    background: rgba(18, 24, 21, 0.05);
+}
+
 /* ---- Hero product card ---- */
 .hero-product-card {
     position: relative;
@@ -298,6 +420,20 @@
 }
 
 .mock-console {
+    /* The product screenshot always shows the real app, which is dark-only
+       by design — these re-declare the shared tokens locally so the mock
+       stays on-brand dark even when the landing page itself is in light
+       mode, instead of following the page's light overrides. */
+    --bg-card: #101215;
+    --bg-tertiary: #14161a;
+    --border-color: rgba(255, 255, 255, 0.07);
+    --border-hover: rgba(255, 255, 255, 0.16);
+    --text-primary: #f2f4f5;
+    --text-secondary: rgba(242, 244, 245, 0.64);
+    --text-tertiary: rgba(242, 244, 245, 0.42);
+    --accent: #22d3a4;
+    --accent-dim: rgba(34, 211, 164, 0.12);
+    --accent-line: rgba(34, 211, 164, 0.4);
     display: flex;
     background: var(--bg-card);
     border: 1px solid var(--border-hover);
@@ -619,6 +755,14 @@
 }
 
 .terminal {
+    /* A terminal window reads as a terminal because it's dark — kept fixed
+       regardless of page theme rather than following the light overrides. */
+    --void: #0a0b0d;
+    --bg-tertiary: #14161a;
+    --border-color: rgba(255, 255, 255, 0.07);
+    --text-primary: #f2f4f5;
+    --text-secondary: rgba(242, 244, 245, 0.64);
+    --accent: #22d3a4;
     background: var(--void);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
@@ -660,6 +804,7 @@
     flex-direction: column;
     gap: 12px;
     min-height: 108px;
+    overflow-x: auto;
 }
 
 .terminal-cursor {
@@ -677,6 +822,7 @@
 .code-line {
     display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: 10px;
     font-family: var(--font-mono);
     font-size: 0.85rem;
@@ -684,10 +830,12 @@
 
 .code-prompt {
     color: var(--accent);
+    font-weight: 600;
 }
 
 .code-line code {
     color: var(--text-primary);
+    white-space: pre;
 }
 
 /* ---- Bottom field ----

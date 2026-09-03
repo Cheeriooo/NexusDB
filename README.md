@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/logo-on-dark.svg" width="72" height="72" alt="NexusDB logo" />
+</p>
+
 # NexusDB
 
 A vector database built from scratch in Python: durable storage, exact and
